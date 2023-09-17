@@ -16,6 +16,8 @@ using namespace saf;
 // This is really similar to imgui example to simplify things
 #define UNLIMITED_FRAME_RATE
 
+#define ARRAYSIZE(carray)          (static_cast<int>(sizeof(carray) / sizeof(*(carray))))
+
 #if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
 #pragma comment(lib, "legacy_stdio_definitions")
 #endif
@@ -29,9 +31,11 @@ static VkAllocationCallbacks *gAllocator = nullptr;
 static VkInstance gInstance = VK_NULL_HANDLE;
 static VkPhysicalDevice gPhysicalDevice = VK_NULL_HANDLE;
 static VkDevice gDevice = VK_NULL_HANDLE;
-static U32 gQueueFamily = (U32)-1;
+static U32 gQueueFamily = static_cast<U32>(-1);
 static VkQueue gQueue = VK_NULL_HANDLE;
+#ifdef VULKAN_DEBUG_MESSENGER
 static VkDebugUtilsMessengerEXT gDebugMessenger = VK_NULL_HANDLE;
+#endif
 static VkPipelineCache gPipelineCache = VK_NULL_HANDLE;
 static VkDescriptorPool gDescriptorPool = VK_NULL_HANDLE;
 
@@ -89,7 +93,7 @@ static VkPhysicalDevice SelectPhysicalDevice()
     SAF_ASSERT(gpuCount > 0);
 
     ImVector<VkPhysicalDevice> gpus;
-    gpus.resize(gpuCount);
+    gpus.resize(static_cast<I32>(gpuCount));
     err = vkEnumeratePhysicalDevices(gInstance, &gpuCount, gpus.Data);
     checkVkResult(err);
 
@@ -119,7 +123,7 @@ static void SetupVulkan(ImVector<const char *> instanceExtensions)
         U32 propertiesCount;
         ImVector<VkExtensionProperties> properties;
         vkEnumerateInstanceExtensionProperties(nullptr, &propertiesCount, nullptr);
-        properties.resize(propertiesCount);
+        properties.resize(static_cast<I32>(propertiesCount));
         err = vkEnumerateInstanceExtensionProperties(nullptr, &propertiesCount, properties.Data);
         checkVkResult(err);
 
@@ -142,7 +146,7 @@ static void SetupVulkan(ImVector<const char *> instanceExtensions)
         instanceExtensions.push_back("VK_EXT_debug_utils");
 #endif
         // Create Vulkan Instance
-        createInfo.enabledExtensionCount = (U32)instanceExtensions.Size;
+        createInfo.enabledExtensionCount = static_cast<U32>(instanceExtensions.Size);
         createInfo.ppEnabledExtensionNames = instanceExtensions.Data;
         err = vkCreateInstance(&createInfo, gAllocator, &gInstance);
         checkVkResult(err);
@@ -163,7 +167,7 @@ static void SetupVulkan(ImVector<const char *> instanceExtensions)
     {
         U32 queueCount;
         vkGetPhysicalDeviceQueueFamilyProperties(gPhysicalDevice, &queueCount, nullptr);
-        VkQueueFamilyProperties *queues = (VkQueueFamilyProperties *)malloc(sizeof(VkQueueFamilyProperties) * queueCount);
+        VkQueueFamilyProperties *queues = static_cast<VkQueueFamilyProperties*>(malloc(sizeof(VkQueueFamilyProperties) * queueCount));
         vkGetPhysicalDeviceQueueFamilyProperties(gPhysicalDevice, &queueCount, queues);
         for (U32 i = 0; i < queueCount; i++)
             if (queues[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
@@ -184,14 +188,14 @@ static void SetupVulkan(ImVector<const char *> instanceExtensions)
         U32 propertiesCount;
         ImVector<VkExtensionProperties> properties;
         vkEnumerateDeviceExtensionProperties(gPhysicalDevice, nullptr, &propertiesCount, nullptr);
-        properties.resize(propertiesCount);
+        properties.resize(static_cast<I32>(propertiesCount));
         vkEnumerateDeviceExtensionProperties(gPhysicalDevice, nullptr, &propertiesCount, properties.Data);
 #ifdef VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
         if (IsExtensionAvailable(properties, VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME))
             deviceExtensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
 #endif
 
-        const float queue_priority[] = {1.0f};
+        const F32 queue_priority[] = {1.0f};
         VkDeviceQueueCreateInfo queue_info[1] = {};
         queue_info[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queue_info[0].queueFamilyIndex = gQueueFamily;
@@ -201,7 +205,7 @@ static void SetupVulkan(ImVector<const char *> instanceExtensions)
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         createInfo.queueCreateInfoCount = sizeof(queue_info) / sizeof(queue_info[0]);
         createInfo.pQueueCreateInfos = queue_info;
-        createInfo.enabledExtensionCount = (U32)deviceExtensions.Size;
+        createInfo.enabledExtensionCount = static_cast<U32>(deviceExtensions.Size);
         createInfo.ppEnabledExtensionNames = deviceExtensions.Data;
         err = vkCreateDevice(gPhysicalDevice, &createInfo, gAllocator, &gDevice);
         checkVkResult(err);
@@ -226,8 +230,8 @@ static void SetupVulkan(ImVector<const char *> instanceExtensions)
         VkDescriptorPoolCreateInfo poolInfo = {};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        poolInfo.maxSets = 1000 * IM_ARRAYSIZE(poolSizes);
-        poolInfo.poolSizeCount = (U32)IM_ARRAYSIZE(poolSizes);
+        poolInfo.maxSets = 1000 * ARRAYSIZE(poolSizes);
+        poolInfo.poolSizeCount = static_cast<U32>(ARRAYSIZE(poolSizes));
         poolInfo.pPoolSizes = poolSizes;
         err = vkCreateDescriptorPool(gDevice, &poolInfo, gAllocator, &gDescriptorPool);
         checkVkResult(err);
@@ -250,7 +254,7 @@ static void SetupVulkanWindow(ImGui_ImplVulkanH_Window *mWindowData, VkSurfaceKH
     // Select Surface Format
     const VkFormat requestSurfaceImageFormat[] = {VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM};
     const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-    mWindowData->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(gPhysicalDevice, mWindowData->Surface, requestSurfaceImageFormat, (PtrSize)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
+    mWindowData->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(gPhysicalDevice, mWindowData->Surface, requestSurfaceImageFormat, static_cast<PtrSize>(ARRAYSIZE(requestSurfaceImageFormat)), requestSurfaceColorSpace);
 
     // Select Present Mode
 #ifdef UNLIMITED_FRAME_RATE
@@ -258,11 +262,11 @@ static void SetupVulkanWindow(ImGui_ImplVulkanH_Window *mWindowData, VkSurfaceKH
 #else
     VkPresentModeKHR present_modes[] = {VK_PRESENT_MODE_FIFO_KHR};
 #endif
-    mWindowData->PresentMode = ImGui_ImplVulkanH_SelectPresentMode(gPhysicalDevice, mWindowData->Surface, &present_modes[0], IM_ARRAYSIZE(present_modes));
+    mWindowData->PresentMode = ImGui_ImplVulkanH_SelectPresentMode(gPhysicalDevice, mWindowData->Surface, &present_modes[0], ARRAYSIZE(present_modes));
 
     // Create SwapChain, RenderPass, Framebuffer, etc.
     SAF_ASSERT(gMinImageCount >= 2);
-    ImGui_ImplVulkanH_CreateOrResizeWindow(gInstance, gPhysicalDevice, gDevice, mWindowData, gQueueFamily, gAllocator, width, height, gMinImageCount);
+    ImGui_ImplVulkanH_CreateOrResizeWindow(gInstance, gPhysicalDevice, gDevice, mWindowData, gQueueFamily, gAllocator, width, height, static_cast<U32>(gMinImageCount));
 }
 
 static void CleanupVulkan()
@@ -321,8 +325,8 @@ static void FrameRender(ImGui_ImplVulkanH_Window *mWindowData, ImDrawData *draw_
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         info.renderPass = mWindowData->RenderPass;
         info.framebuffer = fd->Framebuffer;
-        info.renderArea.extent.width = mWindowData->Width;
-        info.renderArea.extent.height = mWindowData->Height;
+        info.renderArea.extent.width = static_cast<U32>(mWindowData->Width);
+        info.renderArea.extent.height = static_cast<U32>(mWindowData->Height);
         info.clearValueCount = 1;
         info.pClearValues = &mWindowData->ClearValue;
         vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
@@ -459,7 +463,7 @@ bool Application::initVulkanGLFW()
     init_info.PipelineCache = gPipelineCache;
     init_info.DescriptorPool = gDescriptorPool;
     init_info.Subpass = 0;
-    init_info.MinImageCount = gMinImageCount;
+    init_info.MinImageCount = static_cast<U32>(gMinImageCount);
     init_info.ImageCount = mWindowData->ImageCount;
     init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
     init_info.Allocator = gAllocator;
@@ -521,8 +525,8 @@ void Application::run()
             glfwGetFramebufferSize(mWindow, &width, &height);
             if (width > 0 && height > 0)
             {
-                ImGui_ImplVulkan_SetMinImageCount(gMinImageCount);
-                ImGui_ImplVulkanH_CreateOrResizeWindow(gInstance, gPhysicalDevice, gDevice, &gMainWindowData, gQueueFamily, gAllocator, width, height, gMinImageCount);
+                ImGui_ImplVulkan_SetMinImageCount(static_cast<U32>(gMinImageCount));
+                ImGui_ImplVulkanH_CreateOrResizeWindow(gInstance, gPhysicalDevice, gDevice, &gMainWindowData, gQueueFamily, gAllocator, width, height, static_cast<U32>(gMinImageCount));
                 gMainWindowData.FrameIndex = 0;
                 gSwapChainRebuild = false;
             }

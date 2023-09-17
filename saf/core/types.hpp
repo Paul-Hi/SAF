@@ -54,33 +54,38 @@ namespace saf
     /** @brief Typedef for size_t. */
     using PtrSize = size_t;
 
-    /** @brief Typedef for a 4 component float vector. */
-    using Vec4 = Eigen::Vector4<float>;
-    /** @brief Typedef for a 4x4 float matrix. */
-    using Mat4 = Eigen::Matrix4<float>;
-    /** @brief Typedef for a 3 component float vector. */
-    using Vec3 = Eigen::Vector3<float>;
-    /** @brief Typedef for a 3x3 float matrix. */
-    using Mat3 = Eigen::Matrix3<float>;
-    /** @brief Typedef for a 2 component float vector. */
-    using Vec2 = Eigen::Vector2<float>;
-    /** @brief Typedef for a 2x2 float matrix. */
-    using Mat2 = Eigen::Matrix2<float>;
+    /** @brief Typedef for float. */
+    using F32 = float;
+    /** @brief Typedef for double. */
+    using F64 = double;
+
+    /** @brief Typedef for a 4 component F32 vector. */
+    using Vec4 = Eigen::Vector4<F32>;
+    /** @brief Typedef for a 4x4 F32 matrix. */
+    using Mat4 = Eigen::Matrix4<F32>;
+    /** @brief Typedef for a 3 component F32 vector. */
+    using Vec3 = Eigen::Vector3<F32>;
+    /** @brief Typedef for a 3x3 F32 matrix. */
+    using Mat3 = Eigen::Matrix3<F32>;
+    /** @brief Typedef for a 2 component F32 vector. */
+    using Vec2 = Eigen::Vector2<F32>;
+    /** @brief Typedef for a 2x2 F32 matrix. */
+    using Mat2 = Eigen::Matrix2<F32>;
     /** @brief Type alias for a Eigen::Quaternionf. */
     using Quat = Eigen::Quaternionf;
 
-    /** @brief Typedef for a 4 component double vector. */
-    using DVec4 = Eigen::Vector4<double>;
-    /** @brief Typedef for a 4x4 double matrix. */
-    using DMat4 = Eigen::Matrix4<double>;
-    /** @brief Typedef for a 3 component double vector. */
-    using DVec3 = Eigen::Vector3<double>;
-    /** @brief Typedef for a 3x3 double matrix. */
-    using DMat3 = Eigen::Matrix3<double>;
-    /** @brief Typedef for a 2 component double vector. */
-    using DVec2 = Eigen::Vector2<double>;
-    /** @brief Typedef for a 2x2 double matrix. */
-    using DMat2 = Eigen::Matrix2<double>;
+    /** @brief Typedef for a 4 component F64 vector. */
+    using DVec4 = Eigen::Vector4<F64>;
+    /** @brief Typedef for a 4x4 F64 matrix. */
+    using DMat4 = Eigen::Matrix4<F64>;
+    /** @brief Typedef for a 3 component F64 vector. */
+    using DVec3 = Eigen::Vector3<F64>;
+    /** @brief Typedef for a 3x3 F64 matrix. */
+    using DMat3 = Eigen::Matrix3<F64>;
+    /** @brief Typedef for a 2 component F64 vector. */
+    using DVec2 = Eigen::Vector2<F64>;
+    /** @brief Typedef for a 2x2 F64 matrix. */
+    using DMat2 = Eigen::Matrix2<F64>;
     /** @brief Type alias for a Eigen::Quaterniond. */
     using DQuat = Eigen::Quaterniond;
 

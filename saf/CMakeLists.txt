@@ -47,7 +47,7 @@ target_compile_definitions(saf
 target_compile_options(saf
     PUBLIC
     $<$<CXX_COMPILER_ID:MSVC>: /W4>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>: -Wall -Wextra -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-gnu-zero-variadic-macro-arguments -Wno-documentation-unknown-command>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>: -Wall -Wextra -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-gnu-zero-variadic-macro-arguments -Wno-global-constructors -Wno-documentation-unknown-command>
 )
 
 find_package(OpenMP)

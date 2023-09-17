@@ -29,9 +29,9 @@ namespace saf
 
         virtual ~Layer() = default;
 
-        virtual void onAttach(class Application *application) {}
+        virtual void onAttach(class Application *application) { (void)application; }
         virtual void onDetach() {}
-        virtual void onUpdate(class Application *application) {}
+        virtual void onUpdate(class Application *application) { (void)application; }
         virtual void onUIRender() {}
     };
 } // namespace saf

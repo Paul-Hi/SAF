@@ -32,15 +32,16 @@ public:
         if (mUpdate)
         {
             mUpdate = false;
+
 #ifndef SAF_DEBUG
 #pragma omp parallel for
 #endif
-            for (I32 i = 0; i < mData.size(); ++i)
+            for (PtrSize i = 0; i < mData.size(); ++i)
             {
                 mData[i] = Eigen::Vector4<Byte>(
-                    (Byte)(((float)wang(U32(mFrame * i)) / RAND_MAX) * 255),
-                    (Byte)(((float)wang(U32(mFrame * i + mData.size())) / RAND_MAX) * 255),
-                    (Byte)(((float)wang(U32(mFrame * i + 2 * mData.size())) / RAND_MAX) * 255),
+                    static_cast<Byte>(static_cast<F32>(wang(static_cast<U32>(mFrame * i)) / RAND_MAX) * 255),
+                    static_cast<Byte>(static_cast<F32>(wang(static_cast<U32>(mFrame * i + mData.size())) / RAND_MAX) * 255),
+                    static_cast<Byte>(static_cast<F32>(wang(static_cast<U32>(mFrame * i + 2 * mData.size())) / RAND_MAX) * 255),
                     255);
             }
 
@@ -51,11 +52,11 @@ public:
     virtual void onUIRender() override
     {
         ImGui::Begin("WangHash", nullptr);
-        double fr = static_cast<double>(ImGui::GetIO().Framerate);
+        F64 fr = static_cast<F64>(ImGui::GetIO().Framerate);
         ImGui::Text("Average %.3f ms/frame", 1000.0 / fr);
         ImGui::Spacing();
-        ImGui::Image(mImage->getDescriptorSet(), ImVec2(mImage->getWidth(), mImage->getHeight()));
-        mUpdate = ImGui::SliderInt("Noise Frame", (I32 *)&mFrame, 1, 255);
+        ImGui::Image(mImage->getDescriptorSet(), ImVec2(static_cast<F32>(mImage->getWidth()), static_cast<F32>(mImage->getHeight())));
+        mUpdate = ImGui::SliderInt("Noise Frame", reinterpret_cast<I32 *>(&mFrame), 1, 255);
         ImGui::End();
     }
 
@@ -68,11 +69,14 @@ private:
 
 int main(int argc, char **argv)
 {
+    (void)argc;
+    (void)argv;
+
     ApplicationSettings settings;
     settings.windowWidth = 1920;
     settings.windowHeight = 1080;
     settings.name = "Demo";
-    settings.clearColor = Vec4(0.3, 0.3, 0.3, 1.0);
+    settings.clearColor = Vec4(0.3f, 0.3f, 0.3f, 1.0f);
 
     Application app(settings);
 
