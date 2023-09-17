@@ -1,0 +1,11 @@
+# VSC Files
+.vscode/*
+*.code-workspace
+# VS Files
+/.vs/*
+# CMake Files
+CMakeFiles/*
+CMakeCache.txt
+# Build
+build/*
+install/*
