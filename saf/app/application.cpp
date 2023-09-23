@@ -469,21 +469,13 @@ bool Application::initVulkanGLFW()
     initInfo.checkVkResultFn = checkVkResult;
     vkInit(&initInfo, mVulkanContext->renderPass);
 
-    mCommandPool = mVulkanContext->ressourceCommandPool;
-    mCommandBuffer = mVulkanContext->ressourceCommandBuffer;
-
     // Upload Fonts
     {
-
-        ImmediateSubmit::execute(gDevice, gQueue, mCommandPool, mCommandBuffer, [&](VkCommandBuffer cmd)
+        ImmediateSubmit::execute(gDevice, gQueue, mVulkanContext->ressourceCommandPool, mVulkanContext->ressourceCommandBuffer, [&](VkCommandBuffer cmd)
                                  { vkCreateImGuiFontsTexture(cmd); });
 
         vkDestroyImGuiFontUploadObjects();
     }
-
-    mPhysicalDevice = gPhysicalDevice;
-    mLogicalDevice = gDevice;
-    mQueue = gQueue;
 
     return true;
 }
@@ -501,6 +493,31 @@ void Application::shutdownVulkanGLFW()
 
     glfwDestroyWindow(mWindow);
     glfwTerminate();
+}
+
+VkPhysicalDevice Application::getPhysicalDevice()
+{
+    return gPhysicalDevice;
+}
+
+VkDevice Application::getDevice()
+{
+    return gDevice;
+}
+
+VkQueue Application::getQueue()
+{
+    return gQueue;
+}
+
+VkCommandPool Application::getCommandPool()
+{
+    return mVulkanContext->ressourceCommandPool;
+}
+
+VkCommandBuffer Application::getCommandBuffer()
+{
+    return mVulkanContext->ressourceCommandBuffer;
 }
 
 void Application::run()

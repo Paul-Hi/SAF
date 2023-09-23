@@ -54,30 +54,15 @@ namespace saf
 
         void close();
 
-        inline VkPhysicalDevice getPhysicalDevice()
-        {
-            return mPhysicalDevice;
-        }
+        VkPhysicalDevice getPhysicalDevice();
 
-        inline VkDevice getDevice()
-        {
-            return mLogicalDevice;
-        }
+        VkDevice getDevice();
 
-        inline VkQueue getQueue()
-        {
-            return mQueue;
-        }
+        VkQueue getQueue();
 
-        inline VkCommandPool getCommandPool()
-        {
-            return mCommandPool;
-        }
+        VkCommandPool getCommandPool();
 
-        inline VkCommandBuffer getCommandBuffer()
-        {
-            return mCommandBuffer;
-        }
+        VkCommandBuffer getCommandBuffer();
 
         template <typename T>
         void pushLayer()
@@ -108,12 +93,6 @@ namespace saf
 
         GLFWwindow *mWindow;
         struct VulkanContext *mVulkanContext;
-
-        VkPhysicalDevice mPhysicalDevice;
-        VkDevice mLogicalDevice;
-        VkQueue mQueue;
-        VkCommandPool mCommandPool;
-        VkCommandBuffer mCommandBuffer;
 
         std::vector<std::unique_ptr<Layer>> mLayerStack;
     };

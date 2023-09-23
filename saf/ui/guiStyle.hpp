@@ -11,6 +11,7 @@
 #ifndef GUI_STYLE_HPP
 #define GUI_STYLE_HPP
 
+#include "interVariableFont.hpp"
 #include <imgui.h>
 
 namespace saf
@@ -41,7 +42,9 @@ namespace saf
     {
         ImGuiIO &io = ImGui::GetIO();
 
-         io.FontDefault = io.Fonts->AddFontFromFileTTF("fonts/Inter-VariableFont_slnt,wght.ttf", 18.0);
+        ImFontConfig fontConfig;
+        fontConfig.FontDataOwnedByAtlas = false;
+        io.FontDefault = io.Fonts->AddFontFromMemoryCompressedTTF(reinterpret_cast<const void *>(gInterVariableFontCompressedData), gInterVariableFontCompressedSize, 18.0f, &fontConfig);
 
         io.ConfigWindowsMoveFromTitleBarOnly = true; // Only move from title bar
 

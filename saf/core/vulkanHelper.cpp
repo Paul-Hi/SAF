@@ -1092,10 +1092,10 @@ bool saf::vkInit(VulkanInitInfo *info, VkRenderPass render_pass)
     SAF_ASSERT(info->instance != VK_NULL_HANDLE);
     SAF_ASSERT(info->physicalDevice != VK_NULL_HANDLE);
     SAF_ASSERT(info->device != VK_NULL_HANDLE);
-    SAF_ASSERT(info->Queue != VK_NULL_HANDLE);
+    SAF_ASSERT(info->queue != VK_NULL_HANDLE);
     SAF_ASSERT(info->descriptorPool != VK_NULL_HANDLE);
-    SAF_ASSERT(info->MinImageCount >= 2);
-    SAF_ASSERT(info->imageCount >= info->MinImageCount);
+    SAF_ASSERT(info->minImageCount >= 2);
+    SAF_ASSERT(info->imageCount >= info->minImageCount);
     if (info->useDynamicRendering == false)
         SAF_ASSERT(render_pass != VK_NULL_HANDLE);
 
@@ -1228,8 +1228,8 @@ void saf::vkRemoveTexture(VkDescriptorSet descriptorSet)
 VkSurfaceFormatKHR saf::vkSelectSurfaceFormat(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, const VkFormat *requestedFormats, I32 requestedFormatsCount, VkColorSpaceKHR requestedColorSpace)
 {
     SAF_ASSERT(gFunctionsLoaded && "Need to call VulkanLoadFunctions() if IMPL_VULKAN_NO_PROTOTYPES or VK_NO_PROTOTYPES are set!");
-    SAF_ASSERT(requestFormats != nullptr);
-    SAF_ASSERT(requestFormatsCount > 0);
+    SAF_ASSERT(requestedFormats != nullptr);
+    SAF_ASSERT(requestedFormatsCount > 0);
 
     // Per Spec Format and View Format are expected to be the same unless VK_IMAGE_CREATE_MUTABLE_BIT was set at image creation
     // Assuming that the default behavior is without setting this bit, there is no need for separate Swapchain image and image view format
@@ -1273,8 +1273,8 @@ VkSurfaceFormatKHR saf::vkSelectSurfaceFormat(VkPhysicalDevice physicalDevice, V
 VkPresentModeKHR saf::vkSelectPresentMode(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, const VkPresentModeKHR *requestedModes, I32 requestedModesCount)
 {
     SAF_ASSERT(gFunctionsLoaded && "Need to call VulkanLoadFunctions() if IMPL_VULKAN_NO_PROTOTYPES or VK_NO_PROTOTYPES are set!");
-    SAF_ASSERT(request_modes != nullptr);
-    SAF_ASSERT(request_modes_count > 0);
+    SAF_ASSERT(requestedModes != nullptr);
+    SAF_ASSERT(requestedModesCount > 0);
 
     // Request a certain mode and confirm that it is available. If not use VK_PRESENT_MODE_FIFO_KHR which is mandatory
     U32 availableCount = 0;
@@ -1395,10 +1395,13 @@ void vkCreateContextSwapChain(VkPhysicalDevice physicalDevice, VkDevice logicalD
     context->framesInFlight = 0;
 
     // Destroy Ressource Command*
-    vkFreeCommandBuffers(logicalDevice, context->ressourceCommandPool, 1, &context->ressourceCommandBuffer);
-    vkDestroyCommandPool(logicalDevice, context->ressourceCommandPool, allocator);
-    context->ressourceCommandBuffer = VK_NULL_HANDLE;
-    context->ressourceCommandPool = VK_NULL_HANDLE;
+    if (context->ressourceCommandBuffer)
+    {
+        vkFreeCommandBuffers(logicalDevice, context->ressourceCommandPool, 1, &context->ressourceCommandBuffer);
+        vkDestroyCommandPool(logicalDevice, context->ressourceCommandPool, allocator);
+        context->ressourceCommandBuffer = VK_NULL_HANDLE;
+        context->ressourceCommandPool = VK_NULL_HANDLE;
+    }
 
     if (context->renderPass)
     {
@@ -1589,10 +1592,13 @@ void saf::vkDestroyContext(VkInstance instance, VkDevice logicalDevice, VulkanCo
     context->frameSemaphores = nullptr;
 
     // Destroy Ressource Command*
-    vkFreeCommandBuffers(logicalDevice, context->ressourceCommandPool, 1, &context->ressourceCommandBuffer);
-    vkDestroyCommandPool(logicalDevice, context->ressourceCommandPool, allocator);
-    context->ressourceCommandBuffer = VK_NULL_HANDLE;
-    context->ressourceCommandPool = VK_NULL_HANDLE;
+    if (context->ressourceCommandBuffer)
+    {
+        vkFreeCommandBuffers(logicalDevice, context->ressourceCommandPool, 1, &context->ressourceCommandBuffer);
+        vkDestroyCommandPool(logicalDevice, context->ressourceCommandPool, allocator);
+        context->ressourceCommandBuffer = VK_NULL_HANDLE;
+        context->ressourceCommandPool = VK_NULL_HANDLE;
+    }
 
     vkDestroyPipeline(logicalDevice, context->pipeline, allocator);
     vkDestroyRenderPass(logicalDevice, context->renderPass, allocator);
