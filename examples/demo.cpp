@@ -1,5 +1,6 @@
 #include <app/application.hpp>
 #include <core/image.hpp>
+#include <core/vulkanHelper.hpp>
 #include <imgui.h>
 
 using namespace saf;

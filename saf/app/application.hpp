@@ -15,7 +15,6 @@
 #include <vector>
 
 struct GLFWwindow;
-struct ImGui_ImplVulkanH_Window;
 
 namespace saf
 {
@@ -108,7 +107,7 @@ namespace saf
         std::function<void()> mMenubarCallback;
 
         GLFWwindow *mWindow;
-        ImGui_ImplVulkanH_Window *mWindowData;
+        struct VulkanContext *mVulkanContext;
 
         VkPhysicalDevice mPhysicalDevice;
         VkDevice mLogicalDevice;

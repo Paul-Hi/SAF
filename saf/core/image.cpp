@@ -8,6 +8,7 @@
 
 #include "image.hpp"
 #include "immediateSubmit.hpp"
+#include <core/vulkanHelper.hpp>
 #include <ui/imguiBackend.hpp>
 
 using namespace saf;
@@ -185,7 +186,7 @@ void Image::allocateMemory(VkPhysicalDevice physicalDevice, VkDevice logicalDevi
     }
 
     // Descriptor Set:
-    mDescriptorSet = static_cast<VkDescriptorSet>(ImGui_ImplVulkan_AddTexture(mSampler, mImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+    mDescriptorSet = static_cast<VkDescriptorSet>(vkAddTexture(mSampler, mImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
 }
 
 void Image::fillFromStagingBuffer(VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, VkBuffer stagingBuffer, VkExtent3D extent)

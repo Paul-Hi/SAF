@@ -52,7 +52,7 @@ namespace saf
     /** @brief Typedef for 64 bit unsigned integers. */
     using U64 = unsigned long long;
     /** @brief Typedef for size_t. */
-    using PtrSize = size_t;
+    using PtrSize = std::size_t;
 
     /** @brief Typedef for float. */
     using F32 = float;
@@ -209,6 +209,8 @@ namespace saf
             std::abort();
         }
     }
+
+#define ARRAYSIZE(carray) (static_cast<int>(sizeof(carray) / sizeof(*(carray))))
 
 } // namespace saf
 
