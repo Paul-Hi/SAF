@@ -2,7 +2,7 @@
  * @file      guiStyle.hpp
  * @author    Paul Himmler
  * @version   0.01
- * @date      2023
+ * @date      2024
  * @copyright Apache License 2.0
  */
 
@@ -38,13 +38,13 @@ namespace saf
         const ImColor activeGrab(42, 125, 157, 255);
     }
 
-    inline void setupImGuiStyle()
+    inline void setupImGuiStyle(F32 fontSize)
     {
         ImGuiIO &io = ImGui::GetIO();
 
         ImFontConfig fontConfig;
         fontConfig.FontDataOwnedByAtlas = false;
-        io.FontDefault = io.Fonts->AddFontFromMemoryCompressedTTF(reinterpret_cast<const void *>(gInterVariableFontCompressedData), gInterVariableFontCompressedSize, 18.0f, &fontConfig);
+        io.FontDefault = io.Fonts->AddFontFromMemoryCompressedTTF(reinterpret_cast<const void *>(gInterVariableFontCompressedData), gInterVariableFontCompressedSize, fontSize, &fontConfig);
 
         io.ConfigWindowsMoveFromTitleBarOnly = true; // Only move from title bar
 

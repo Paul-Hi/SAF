@@ -2,7 +2,7 @@
  * @file      application.cpp
  * @author    Paul Himmler
  * @version   0.01
- * @date      2023
+ * @date      2024
  * @copyright Apache License 2.0
  */
 
@@ -378,7 +378,7 @@ static void framePresent(VulkanContext *context)
 }
 
 Application::Application(const ApplicationSettings &settings)
-    : mName(settings.name), mWindowWidth(settings.windowWidth), mWindowHeight(settings.windowHeight), mClearColor(settings.clearColor), mRunning(true)
+    : mName(settings.name), mWindowWidth(settings.windowWidth), mWindowHeight(settings.windowHeight), mFontSize(settings.fontSize), mClearColor(settings.clearColor), mRunning(true)
 {
     initVulkanGLFW();
 }
@@ -441,7 +441,7 @@ bool Application::initVulkanGLFW()
     // io.ConfigViewportsNoTaskBarIcon = true;
 
     // Setup Dear ImGui style
-    setupImGuiStyle();
+    setupImGuiStyle(mFontSize);
 
     // When viewports are enabled we tweak WindowRounding/WindowBg so platform mWindows can look identical to regular ones.
     ImGuiStyle &style = ImGui::GetStyle();

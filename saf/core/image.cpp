@@ -2,7 +2,7 @@
  * @file      image.cpp
  * @author    Paul Himmler
  * @version   0.01
- * @date      2023
+ * @date      2024
  * @copyright Apache License 2.0
  */
 
@@ -59,6 +59,20 @@ static U32 findMemoryType(const U32 typeFilter, const VkPhysicalDeviceMemoryProp
     std::abort();
 }
 
+static U32 bytesPerPixel(VkFormat format) // only some formats handled
+{
+    switch (format)
+    {
+    case VK_FORMAT_R8G8B8A8_SINT:
+    case VK_FORMAT_R8G8B8A8_UINT:
+    case VK_FORMAT_R8G8B8A8_UNORM:
+        return 4;
+    case VK_FORMAT_R32G32B32A32_SFLOAT:
+        return 16;
+    }
+    return 0;
+}
+
 void Image::update(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, U32 width, U32 height, VkFormat format, const void *data)
 {
     mDeviceRef = logicalDevice;
@@ -72,13 +86,15 @@ void Image::update(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQu
         allocateMemory(physicalDevice, logicalDevice, queue, commandPool, commandBuffer);
     }
 
-    const VkMemoryRequirements requirements = getMemoryRequirements();
+    SAF_ASSERT(mFormat == format);
+
+    PtrSize uploadSizeInBytes = mWidth * mHeight * bytesPerPixel(format);
 
     if (!mStagingBuffer)
     {
         VkBufferCreateInfo bufferInfo = {};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = requirements.size;
+        bufferInfo.size = uploadSizeInBytes;
         bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         err = vkCreateBuffer(logicalDevice, &bufferInfo, nullptr, &mStagingBuffer);
@@ -123,7 +139,7 @@ void Image::update(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQu
         char *map = NULL;
         err = vkMapMemory(logicalDevice, mStagingBufferMemory, 0, mAlignedSize, 0, (void **)(&map));
         checkVkResult(err);
-        memcpy(map, data, requirements.size);
+        memcpy(map, data, uploadSizeInBytes);
         VkMappedMemoryRange range[1] = {};
         range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
         range[0].memory = mStagingBufferMemory;
