@@ -1712,7 +1712,6 @@ static void vkCreateImGuiViewportContext(ImGuiViewport *viewport)
     context->surfaceFormat = vkSelectSurfaceFormat(v->physicalDevice, context->surface, requestSurfaceImageFormat, static_cast<PtrSize>(ARRAYSIZE(requestSurfaceImageFormat)), requestSurfaceColorSpace);
 
     // Select Present Mode
-    // FIXME-VULKAN: Even thought mailbox seems to get us maximum framerate with a single window, it halves framerate with a second window etc. (width/ Nvidia and SDK 1.82.1)
     VkPresentModeKHR presentModes[] = {VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_FIFO_KHR};
     context->presentMode = vkSelectPresentMode(v->physicalDevice, context->surface, &presentModes[0], ARRAYSIZE(presentModes));
 

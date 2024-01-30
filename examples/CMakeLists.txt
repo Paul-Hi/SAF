@@ -46,8 +46,6 @@ target_compile_definitions(${APP_NAME}
 
 if(WIN32)
     set(SUBSYSTEM_LINKER_OPTIONS "/SUBSYSTEM:CONSOLE")
-else()
-    set(SUBSYSTEM_LINKER_OPTIONS "-mwindows")
 endif()
 
 target_link_options(${APP_NAME} PRIVATE ${SUBSYSTEM_LINKER_OPTIONS})

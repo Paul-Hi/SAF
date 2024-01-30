@@ -403,6 +403,7 @@ bool Application::initVulkanGLFW()
         return false;
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
     mWindow = glfwCreateWindow(mWindowWidth, mWindowHeight, mName.c_str(), nullptr, nullptr);
     if (!glfwVulkanSupported())
     {
@@ -441,7 +442,9 @@ bool Application::initVulkanGLFW()
     // io.ConfigViewportsNoTaskBarIcon = true;
 
     // Setup Dear ImGui style
-    setupImGuiStyle(mFontSize);
+    float xScale, yScale;
+    glfwGetWindowContentScale(mWindow, &xScale, &yScale);
+    setupImGuiStyle(mFontSize * std::max(xScale, yScale));
 
     // When viewports are enabled we tweak WindowRounding/WindowBg so platform mWindows can look identical to regular ones.
     ImGuiStyle &style = ImGui::GetStyle();
