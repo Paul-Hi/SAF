@@ -1,4 +1,5 @@
 #include <app/application.hpp>
+#include <app/parameter.hpp>
 #include <core/image.hpp>
 #include <imgui.h>
 
@@ -72,7 +73,7 @@ class DemoLayer : public Layer
 public:
     virtual void onAttach(Application *application) override
     {
-        Random::init(UVec2(mFrame, mFrame));
+        Random::init(mSeed);
         mData.resize(720 * 720, Eigen::Vector4<Byte>(255, 0, 0, 255));
         mImage = std::make_shared<Image>(application->getPhysicalDevice(), application->getDevice(), application->getQueue(), application->getCommandPool(), application->getCommandBuffer(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
     }
@@ -86,6 +87,8 @@ public:
         if (mUpdate)
         {
             mUpdate = false;
+
+            Random::init(mSeed);
 
 #ifndef SAF_DEBUG
 #pragma omp parallel for
@@ -110,13 +113,13 @@ public:
         ImGui::Text("Average %.3f ms/frame", 1000.0 / fr);
         ImGui::Spacing();
         ImGui::Image(mImage->getDescriptorSet(), ImVec2(static_cast<F32>(mImage->getWidth()), static_cast<F32>(mImage->getHeight())));
-        mUpdate = ImGui::SliderInt("Noise Frame", reinterpret_cast<I32 *>(&mFrame), 1, 255);
+        mUpdate = mSeed.onUIRender();
         ImGui::End();
     }
 
 private:
     bool mUpdate = true;
-    U32 mFrame = 1;
+    UVec2Parameter mSeed = UVec2Parameter("Noise Seed", UVec2(19, 97), 0, UINT8_MAX);
     std::shared_ptr<Image> mImage;
     std::vector<Eigen::Vector4<Byte>> mData;
 };
