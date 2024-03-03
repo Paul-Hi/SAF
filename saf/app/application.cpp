@@ -374,7 +374,7 @@ static void framePresent(VulkanContext *context)
         return;
     }
     checkVkResult(err);
-    context->semaphoreIndex = (context->semaphoreIndex + 1) % context->framesInFlight; // Now we can use the next set of semaphores
+    context->semaphoreIndex = (context->semaphoreIndex + 1) % context->semaphoreCount; // Now we can use the next set of semaphores
 }
 
 Application::Application(const ApplicationSettings &settings)

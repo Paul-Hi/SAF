@@ -77,7 +77,7 @@ find_package(Vulkan REQUIRED)
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui
-    GIT_TAG v1.89.7-docking
+    GIT_TAG v1.90.4-docking
     GIT_SHALLOW ON
     GIT_PROGRESS ON
 )

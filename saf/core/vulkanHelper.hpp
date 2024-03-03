@@ -80,6 +80,7 @@ namespace saf
         VkClearValue clearValue;
         U32 frameIndex;
         U32 framesInFlight;
+        U32 semaphoreCount; // framesInFlight + 1
         U32 semaphoreIndex;
         VulkanFrameData *frames;
         VulkanFrameSemaphores *frameSemaphores;

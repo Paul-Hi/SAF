@@ -627,9 +627,9 @@ bool saf::vkCreateImGuiFontsTexture(VkCommandBuffer commandBuffer)
     VulkanInitInfo *v = &bd->vulkanInitInfo;
 
     unsigned char *pixels;
-    I32 width, height;
-    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
-    PtrSize uploadSize = width * height * 4 * sizeof(char);
+    I32 width, height, bytesPerPixel;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height, &bytesPerPixel);
+    PtrSize uploadSize = width * height * bytesPerPixel;
 
     VkResult err;
 
@@ -1304,7 +1304,6 @@ void vkCreateContextCommandBuffers(VkPhysicalDevice physicalDevice, VkDevice log
     for (U32 i = 0; i < context->framesInFlight; i++)
     {
         VulkanFrameData *fd = &context->frames[i];
-        VulkanFrameSemaphores *fsd = &context->frameSemaphores[i];
         {
             VkCommandPoolCreateInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -1329,6 +1328,11 @@ void vkCreateContextCommandBuffers(VkPhysicalDevice physicalDevice, VkDevice log
             err = vkCreateFence(logicalDevice, &info, allocator, &fd->fence);
             checkVkResultBD(err);
         }
+    }
+
+    for (U32 i = 0; i < context->semaphoreCount; i++)
+    {
+        VulkanFrameSemaphores *fsd = &context->frameSemaphores[i];
         {
             VkSemaphoreCreateInfo info = {};
             info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1338,7 +1342,6 @@ void vkCreateContextCommandBuffers(VkPhysicalDevice physicalDevice, VkDevice log
             checkVkResultBD(err);
         }
     }
-
     // ressource
 
     {
@@ -1386,8 +1389,13 @@ void vkCreateContextSwapChain(VkPhysicalDevice physicalDevice, VkDevice logicalD
     for (U32 i = 0; i < context->framesInFlight; i++)
     {
         vkDestroyFrame(logicalDevice, &context->frames[i], allocator);
+    }
+
+    for (U32 i = 0; i < context->semaphoreCount; i++)
+    {
         vkDestroyFrameSemaphores(logicalDevice, &context->frameSemaphores[i], allocator);
     }
+
     IM_FREE(context->frames);
     IM_FREE(context->frameSemaphores);
     context->frames = nullptr;
@@ -1465,12 +1473,13 @@ void vkCreateContextSwapChain(VkPhysicalDevice physicalDevice, VkDevice logicalD
         SAF_ASSERT(context->framesInFlight < ARRAYSIZE(backbuffers));
         err = vkGetSwapchainImagesKHR(logicalDevice, context->swapchain, &context->framesInFlight, backbuffers);
         checkVkResultBD(err);
+        context->semaphoreCount = context->framesInFlight + 1;
 
-        SAF_ASSERT(context->frames == nullptr);
+        SAF_ASSERT(context->frames == nullptr && context->frameSemaphores == nullptr);
         context->frames = static_cast<VulkanFrameData *>(IM_ALLOC(sizeof(VulkanFrameData) * context->framesInFlight));
-        context->frameSemaphores = static_cast<VulkanFrameSemaphores *>(IM_ALLOC(sizeof(VulkanFrameSemaphores) * context->framesInFlight));
+        context->frameSemaphores = static_cast<VulkanFrameSemaphores *>(IM_ALLOC(sizeof(VulkanFrameSemaphores) * context->semaphoreCount));
         memset(context->frames, 0, sizeof(context->frames[0]) * context->framesInFlight);
-        memset(context->frameSemaphores, 0, sizeof(context->frameSemaphores[0]) * context->framesInFlight);
+        memset(context->frameSemaphores, 0, sizeof(context->frameSemaphores[0]) * context->semaphoreCount);
         for (U32 i = 0; i < context->framesInFlight; i++)
         {
             context->frames[i].backbuffer = backbuffers[i];
@@ -1584,8 +1593,13 @@ void saf::vkDestroyContext(VkInstance instance, VkDevice logicalDevice, VulkanCo
     for (U32 i = 0; i < context->framesInFlight; i++)
     {
         vkDestroyFrame(logicalDevice, &context->frames[i], allocator);
+    }
+
+    for (U32 i = 0; i < context->semaphoreCount; i++)
+    {
         vkDestroyFrameSemaphores(logicalDevice, &context->frameSemaphores[i], allocator);
     }
+
     IM_FREE(context->frames);
     IM_FREE(context->frameSemaphores);
     context->frames = nullptr;
@@ -1914,7 +1928,7 @@ static void vkSwapImGuiViewportBuffers(ImGuiViewport *viewport, void *)
     }
 
     context->frameIndex = (context->frameIndex + 1) % context->framesInFlight;         // This is for the next vkWaitForFences()
-    context->semaphoreIndex = (context->semaphoreIndex + 1) % context->framesInFlight; // Now we can use the next set of semaphores
+    context->semaphoreIndex = (context->semaphoreIndex + 1) % context->semaphoreCount; // Now we can use the next set of semaphores
 }
 
 void vkInitPlatformInterface()
