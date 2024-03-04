@@ -163,7 +163,7 @@ namespace saf
     }
 
     template <typename e>
-    typename std::enable_if<BitMaskOperations<e>::enable, e &>::type operator|=(e &Lhs, e Rhs)
+    typename std::enable_if<BitMaskOperations<e>::enable, e&>::type operator|=(e& Lhs, e Rhs)
     {
         typedef typename std::underlying_type<e>::type Underlying;
         Lhs = static_cast<e>(static_cast<Underlying>(Lhs) | static_cast<Underlying>(Rhs));
@@ -171,7 +171,7 @@ namespace saf
     }
 
     template <typename e>
-    typename std::enable_if<BitMaskOperations<e>::enable, e &>::type operator&=(e &Lhs, e Rhs)
+    typename std::enable_if<BitMaskOperations<e>::enable, e&>::type operator&=(e& Lhs, e Rhs)
     {
         typedef typename std::underlying_type<e>::type Underlying;
         Lhs = static_cast<e>(static_cast<Underlying>(Lhs) & static_cast<Underlying>(Rhs));
@@ -179,7 +179,7 @@ namespace saf
     }
 
     template <typename e>
-    typename std::enable_if<BitMaskOperations<e>::enable, e &>::type operator^=(e &Lhs, e Rhs)
+    typename std::enable_if<BitMaskOperations<e>::enable, e&>::type operator^=(e& Lhs, e Rhs)
     {
         typedef typename std::underlying_type<e>::type Underlying;
         Lhs = static_cast<e>(static_cast<Underlying>(Lhs) ^ static_cast<Underlying>(Rhs));

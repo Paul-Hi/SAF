@@ -34,7 +34,7 @@ namespace saf
         bool useDynamicRendering;
         VkFormat colorAttachmentFormat;
 
-        const VkAllocationCallbacks *allocator;
+        const VkAllocationCallbacks* allocator;
         void (*checkVkResultFn)(VkResult err);
     };
 
@@ -82,8 +82,8 @@ namespace saf
         U32 framesInFlight;
         U32 semaphoreCount; // framesInFlight + 1
         U32 semaphoreIndex;
-        VulkanFrameData *frames;
-        VulkanFrameSemaphores *frameSemaphores;
+        VulkanFrameData* frames;
+        VulkanFrameSemaphores* frameSemaphores;
 
         VkCommandPool ressourceCommandPool;
         VkCommandBuffer ressourceCommandBuffer;
@@ -96,10 +96,10 @@ namespace saf
         }
     };
 
-    bool vkInit(VulkanInitInfo *info, VkRenderPass renderPass);
+    bool vkInit(VulkanInitInfo* info, VkRenderPass renderPass);
     void vkShutdown();
     void vkNewFrame();
-    void vkRenderImGuiDrawData(ImDrawData *drawData, VkCommandBuffer commandBuffer, VkPipeline pipeline = VK_NULL_HANDLE);
+    void vkRenderImGuiDrawData(ImDrawData* drawData, VkCommandBuffer commandBuffer, VkPipeline pipeline = VK_NULL_HANDLE);
     bool vkCreateImGuiFontsTexture(VkCommandBuffer commandBuffer);
     void vkDestroyImGuiFontUploadObjects();
     void vkSetMinImageCount(U32 minImageCount);
@@ -109,12 +109,12 @@ namespace saf
 
     // Optional: load Vulkan functions with a custom function loader
     // This is only useful with IMGUI_IMPL_VULKAN_NO_PROTOTYPES / VK_NO_PROTOTYPES
-    bool vkLoadFunctions(PFN_vkVoidFunction (*loaderFunc)(const char *functionName, void *userData), void *userData = nullptr);
+    bool vkLoadFunctions(PFN_vkVoidFunction (*loaderFunc)(const char* functionName, void* userData), void* userData = nullptr);
 
-    void vkCreateOrResizeContext(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VulkanContext *context, U32 queueFamily, const VkAllocationCallbacks *allocator, I32 width, I32 height, U32 minImageCount);
-    void vkDestroyContext(VkInstance instance, VkDevice logicalDevice, VulkanContext *context, const VkAllocationCallbacks *allocator);
-    VkSurfaceFormatKHR vkSelectSurfaceFormat(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, const VkFormat *requestedFormats, I32 requestedFormatsCount, VkColorSpaceKHR requestedColorSpace);
-    VkPresentModeKHR vkSelectPresentMode(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, const VkPresentModeKHR *requestModes, I32 requestedModesCount);
+    void vkCreateOrResizeContext(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VulkanContext* context, U32 queueFamily, const VkAllocationCallbacks* allocator, I32 width, I32 height, U32 minImageCount);
+    void vkDestroyContext(VkInstance instance, VkDevice logicalDevice, VulkanContext* context, const VkAllocationCallbacks* allocator);
+    VkSurfaceFormatKHR vkSelectSurfaceFormat(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, const VkFormat* requestedFormats, I32 requestedFormatsCount, VkColorSpaceKHR requestedColorSpace);
+    VkPresentModeKHR vkSelectPresentMode(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, const VkPresentModeKHR* requestModes, I32 requestedModesCount);
     I32 vkGetMinImageCountFromPresentMode(VkPresentModeKHR presentMode);
 
 } // namespace saf

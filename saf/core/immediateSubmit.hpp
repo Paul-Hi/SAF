@@ -26,23 +26,23 @@ namespace saf
          * @param[in] commandBuffer The VkCommandBuffer.
          * @param[in] immediateFunction A function pointer to the commands to execute immediately.
          */
-        static void execute(VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, const std::function<void(VkCommandBuffer)> &immediateFunction)
+        static void execute(VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, const std::function<void(VkCommandBuffer)>& immediateFunction)
         {
             VkResult err = vkResetCommandPool(logicalDevice, commandPool, 0);
             checkVkResult(err);
             VkCommandBufferBeginInfo beginInfo = {};
-            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            beginInfo.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
             err = vkBeginCommandBuffer(commandBuffer, &beginInfo);
             checkVkResult(err);
 
             immediateFunction(commandBuffer);
 
-            VkSubmitInfo endInfo = {};
-            endInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            VkSubmitInfo endInfo       = {};
+            endInfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
             endInfo.commandBufferCount = 1;
-            endInfo.pCommandBuffers = &commandBuffer;
-            err = vkEndCommandBuffer(commandBuffer);
+            endInfo.pCommandBuffers    = &commandBuffer;
+            err                        = vkEndCommandBuffer(commandBuffer);
             checkVkResult(err);
             err = vkQueueSubmit(queue, 1, &endInfo, VK_NULL_HANDLE);
             checkVkResult(err);

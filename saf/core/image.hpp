@@ -16,8 +16,8 @@ namespace saf
     class Image
     {
     public:
-        Image(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, U32 width, U32 height, VkFormat format, const void *data = nullptr);
-        Image(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, const Str &fileName);
+        Image(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, U32 width, U32 height, VkFormat format, const void* data = nullptr);
+        Image(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, const Str& fileName);
         ~Image();
 
         VkDescriptorSet getDescriptorSet() const
@@ -25,7 +25,7 @@ namespace saf
             return mDescriptorSet;
         }
 
-        void update(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, U32 width, U32 height, VkFormat format, const void *data = nullptr);
+        void update(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, U32 width, U32 height, VkFormat format, const void* data = nullptr);
 
         inline U32 getWidth()
         {
@@ -48,14 +48,14 @@ namespace saf
         U32 mWidth;
         U32 mHeight;
 
-        VkImage mImage = VK_NULL_HANDLE;
+        VkImage mImage         = VK_NULL_HANDLE;
         VkImageView mImageView = VK_NULL_HANDLE;
         VkImageLayout mImageLayout;
-        VkDeviceMemory mDeviceMemory = VK_NULL_HANDLE;
+        VkDeviceMemory mDeviceMemory   = VK_NULL_HANDLE;
         VkDescriptorSet mDescriptorSet = VK_NULL_HANDLE;
-        VkSampler mSampler = VK_NULL_HANDLE;
+        VkSampler mSampler             = VK_NULL_HANDLE;
         VkFormat mFormat;
-        VkBuffer mStagingBuffer = VK_NULL_HANDLE;
+        VkBuffer mStagingBuffer             = VK_NULL_HANDLE;
         VkDeviceMemory mStagingBufferMemory = VK_NULL_HANDLE;
 
         VkDevice mDeviceRef;

@@ -13,22 +13,25 @@
 
 using namespace saf;
 
-Image::Image(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, U32 width, U32 height, VkFormat format, const void *data)
-    : mWidth(width), mHeight(height), mFormat(format), mDeviceRef(logicalDevice)
+Image::Image(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, U32 width, U32 height, VkFormat format, const void* data)
+    : mWidth(width)
+    , mHeight(height)
+    , mFormat(format)
+    , mDeviceRef(logicalDevice)
 {
     VkImageCreateInfo imageCreateInfo{};
-    imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageCreateInfo.extent = {width, height, 1};
-    imageCreateInfo.mipLevels = 1;
-    imageCreateInfo.arrayLayers = 1;
-    imageCreateInfo.format = format;
-    imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageCreateInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageCreateInfo.imageType     = VK_IMAGE_TYPE_2D;
+    imageCreateInfo.extent        = { width, height, 1 };
+    imageCreateInfo.mipLevels     = 1;
+    imageCreateInfo.arrayLayers   = 1;
+    imageCreateInfo.format        = format;
+    imageCreateInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
     imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageCreateInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageCreateInfo.flags = 0;
+    imageCreateInfo.usage         = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    imageCreateInfo.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    imageCreateInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
+    imageCreateInfo.flags         = 0;
 
     VkResult err = vkCreateImage(logicalDevice, &imageCreateInfo, nullptr, &mImage);
     checkVkResult(err);
@@ -38,7 +41,7 @@ Image::Image(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue qu
     update(physicalDevice, logicalDevice, queue, commandPool, commandBuffer, width, height, format, data);
 }
 
-Image::Image(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, const Str &fileName)
+Image::Image(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, const Str& fileName)
     : mDeviceRef(logicalDevice)
 {
     std::cerr << "Unimplemented" << '\n';
@@ -73,14 +76,14 @@ static U32 bytesPerPixel(VkFormat format) // only some formats handled
     return 0;
 }
 
-void Image::update(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, U32 width, U32 height, VkFormat format, const void *data)
+void Image::update(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer, U32 width, U32 height, VkFormat format, const void* data)
 {
     mDeviceRef = logicalDevice;
     VkResult err;
 
     if (mWidth != width || mHeight != height)
     {
-        mWidth = width;
+        mWidth  = width;
         mHeight = height;
         release();
         allocateMemory(physicalDevice, logicalDevice, queue, commandPool, commandBuffer);
@@ -93,22 +96,22 @@ void Image::update(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQu
     if (!mStagingBuffer)
     {
         VkBufferCreateInfo bufferInfo = {};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = uploadSizeInBytes;
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        err = vkCreateBuffer(logicalDevice, &bufferInfo, nullptr, &mStagingBuffer);
+        bufferInfo.sType              = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size               = uploadSizeInBytes;
+        bufferInfo.usage              = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        bufferInfo.sharingMode        = VK_SHARING_MODE_EXCLUSIVE;
+        err                           = vkCreateBuffer(logicalDevice, &bufferInfo, nullptr, &mStagingBuffer);
         checkVkResult(err);
         VkMemoryRequirements bufferRequirements;
         vkGetBufferMemoryRequirements(logicalDevice, mStagingBuffer, &bufferRequirements);
         VkMemoryAllocateInfo alloc_info = {};
-        alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        alloc_info.allocationSize = bufferRequirements.size;
-        mAlignedSize = bufferRequirements.size;
+        alloc_info.sType                = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        alloc_info.allocationSize       = bufferRequirements.size;
+        mAlignedSize                    = bufferRequirements.size;
         VkPhysicalDeviceMemoryProperties memoryProperties;
         vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
         alloc_info.memoryTypeIndex = findMemoryType(bufferRequirements.memoryTypeBits, memoryProperties, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-        err = vkAllocateMemory(logicalDevice, &alloc_info, nullptr, &mStagingBufferMemory);
+        err                        = vkAllocateMemory(logicalDevice, &alloc_info, nullptr, &mStagingBufferMemory);
         checkVkResult(err);
         err = vkBindBufferMemory(logicalDevice, mStagingBuffer, mStagingBufferMemory, 0);
         checkVkResult(err);
@@ -136,20 +139,20 @@ void Image::update(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQu
 
     // Upload to Buffer
     {
-        char *map = NULL;
-        err = vkMapMemory(logicalDevice, mStagingBufferMemory, 0, mAlignedSize, 0, (void **)(&map));
+        char* map = NULL;
+        err       = vkMapMemory(logicalDevice, mStagingBufferMemory, 0, mAlignedSize, 0, (void**)(&map));
         checkVkResult(err);
         memcpy(map, data, uploadSizeInBytes);
         VkMappedMemoryRange range[1] = {};
-        range[0].sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        range[0].memory = mStagingBufferMemory;
-        range[0].size = mAlignedSize;
-        err = vkFlushMappedMemoryRanges(logicalDevice, 1, range);
+        range[0].sType               = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        range[0].memory              = mStagingBufferMemory;
+        range[0].size                = mAlignedSize;
+        err                          = vkFlushMappedMemoryRanges(logicalDevice, 1, range);
         checkVkResult(err);
         vkUnmapMemory(logicalDevice, mStagingBufferMemory);
     }
 
-    fillFromStagingBuffer(logicalDevice, queue, commandPool, commandBuffer, mStagingBuffer, VkExtent3D{mWidth, mHeight, 1});
+    fillFromStagingBuffer(logicalDevice, queue, commandPool, commandBuffer, mStagingBuffer, VkExtent3D{ mWidth, mHeight, 1 });
 }
 
 void Image::allocateMemory(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer)
@@ -161,10 +164,10 @@ void Image::allocateMemory(VkPhysicalDevice physicalDevice, VkDevice logicalDevi
         VkPhysicalDeviceMemoryProperties memoryProperties;
         vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
         VkMemoryAllocateInfo allocInfo = {};
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = requirements.size;
-        allocInfo.memoryTypeIndex = findMemoryType(requirements.memoryTypeBits, memoryProperties, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        err = vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &mDeviceMemory);
+        allocInfo.sType                = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize       = requirements.size;
+        allocInfo.memoryTypeIndex      = findMemoryType(requirements.memoryTypeBits, memoryProperties, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        err                            = vkAllocateMemory(logicalDevice, &allocInfo, nullptr, &mDeviceMemory);
         checkVkResult(err);
         err = vkBindImageMemory(logicalDevice, mImage, mDeviceMemory, 0);
         checkVkResult(err);
@@ -172,32 +175,32 @@ void Image::allocateMemory(VkPhysicalDevice physicalDevice, VkDevice logicalDevi
 
     // Image View
     {
-        VkImageViewCreateInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        info.image = mImage;
-        info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        info.format = mFormat;
+        VkImageViewCreateInfo info       = {};
+        info.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        info.image                       = mImage;
+        info.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
+        info.format                      = mFormat;
         info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         info.subresourceRange.levelCount = 1;
         info.subresourceRange.layerCount = 1;
-        err = vkCreateImageView(logicalDevice, &info, nullptr, &mImageView);
+        err                              = vkCreateImageView(logicalDevice, &info, nullptr, &mImageView);
         checkVkResult(err);
     }
 
     // Sampler
     {
         VkSamplerCreateInfo info = {};
-        info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-        info.magFilter = VK_FILTER_LINEAR;
-        info.minFilter = VK_FILTER_LINEAR;
-        info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        info.minLod = -1000;
-        info.maxLod = 1000;
-        info.maxAnisotropy = 1.0f;
-        err = vkCreateSampler(logicalDevice, &info, nullptr, &mSampler);
+        info.sType               = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        info.magFilter           = VK_FILTER_LINEAR;
+        info.minFilter           = VK_FILTER_LINEAR;
+        info.mipmapMode          = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        info.addressModeU        = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        info.addressModeV        = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        info.addressModeW        = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        info.minLod              = -1000;
+        info.maxLod              = 1000;
+        info.maxAnisotropy       = 1.0f;
+        err                      = vkCreateSampler(logicalDevice, &info, nullptr, &mSampler);
         checkVkResult(err);
     }
 

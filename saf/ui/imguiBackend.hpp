@@ -11,7 +11,7 @@
 #ifndef IMGUI_BACKEND_HPP
 #define IMGUI_BACKEND_HPP
 
-#include <imgui.h>
 #include <backends/imgui_impl_glfw.h>
+#include <imgui.h>
 
 #endif // IMGUI_BACKEND_HPP

@@ -34,7 +34,7 @@ namespace saf
          * @details Can be used to initialized required @a Layer members.
          * @param[in] application A pointer to the @a Application the @a Layer is attached to.
          */
-        virtual void onAttach(class Application *application) { (void)application; }
+        virtual void onAttach(class Application* application) { (void)application; }
 
         /**
          * @brief Called when @a Layer is detached from the application.
@@ -46,7 +46,7 @@ namespace saf
          * @brief Called when @a Layer is updated by the application.
          * @param[in] application A pointer to the @a Application the @a Layer is updated by.
          */
-        virtual void onUpdate(class Application *application) { (void)application; }
+        virtual void onUpdate(class Application* application) { (void)application; }
 
         /**
          * @brief Called when the application is rendering the user interface.
