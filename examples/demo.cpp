@@ -5,6 +5,7 @@
 #include <core/image.hpp>
 #include <imgui.h>
 #include <ui/imguiBackend.hpp>
+#include <ui/log.hpp>
 
 using namespace saf;
 
@@ -53,6 +54,7 @@ public:
         ImGui::Spacing();
         ImGui::Image(mImage->getDescriptorSet(), ImVec2(static_cast<F32>(mImage->getWidth()), static_cast<F32>(mImage->getHeight())));
         mUpdate = mSeed.onUIRender();
+
         mRandom.onUIRender();
 
         ImGui::Spacing();
@@ -64,6 +66,8 @@ public:
         mTest.onUIRender();
 
         ImGui::End();
+
+        UILog::get().render("Log");
     }
 
 private:

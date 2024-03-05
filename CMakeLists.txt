@@ -100,7 +100,21 @@ FetchContent_Declare(
     GIT_PROGRESS ON
 )
 
-FetchContent_MakeAvailable(imgui eigen glfw)
+# pybind11
+#FetchContent_Declare(
+#    pybind11
+#    GIT_REPOSITORY https://github.com/pybind/pybind11
+#    GIT_TAG v2.11.1
+#)
+#set(PYBIND11_FINDPYTHON CACHE INTERNAL false)
+#set(PYBIND11_INSTALL CACHE INTERNAL false)
+#set(PYBIND11_INTERNALS_VERSION CACHE INTERNAL "")
+#set(PYBIND11_NOPYTHON CACHE INTERNAL false)
+#set(PYBIND11_PYTHON_VERSION CACHE INTERNAL "")
+#set(PYBIND11_TEST CACHE INTERNAL false)
+#set(pybind11_DIR CACHE INTERNAL "")
+
+FetchContent_MakeAvailable(imgui eigen glfw)# pybind11)
 
 set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "Build the GLFW example programs")
 set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "Build the GLFW test programs")
@@ -144,6 +158,8 @@ message(STATUS "================================================")
 set(SAF_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/saf)
 
 add_subdirectory(saf)
+
+# add_subdirectory(pysaf)
 
 add_subdirectory(examples)
 
