@@ -128,8 +128,8 @@ namespace saf
             std::function<void(sol::state&)> cleanup;
         };
 
-        template <typename SetupFn, typename CleanupFn, typename LogFn>
-        inline void createScript(const Str& scriptName, const Str& scriptSource, const SetupFn& setup, const CleanupFn& cleanup, const LogFn& log)
+        template <typename Layer, typename SetupFn, typename CleanupFn, typename LogFn>
+        inline void createScript(Layer* layerPtr, const Str& scriptName, const Str& scriptSource, const SetupFn& setup, const CleanupFn& cleanup, const LogFn& log)
         {
             Script script;
 
@@ -145,6 +145,8 @@ namespace saf
                 };
 
                 setup(script.state);
+
+                script.state["layer"] = layerPtr;
 
                 script.state.safe_script(scriptSource);
 
@@ -164,8 +166,6 @@ namespace saf
                 log(e.what());
             }
         }
-
-        void updateScriptBindings();
 
         void uiRenderActiveScripts();
 

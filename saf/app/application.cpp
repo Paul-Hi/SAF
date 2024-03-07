@@ -547,6 +547,7 @@ void Application::run()
             {
                 script.onDetach();
                 script.cleanup(script.state);
+                script.state.script("layer = nil");
                 script.state.collect_garbage();
                 it = mActiveScripts.erase(it);
             }
@@ -642,6 +643,7 @@ void Application::run()
         auto& [_, script] = *it;
         script.onDetach();
         script.cleanup(script.state);
+        script.state.script("layer = nil");
         it = mActiveScripts.erase(it);
     }
 }
@@ -657,16 +659,6 @@ void Application::popLayer()
     mLayerStack.pop_back();
 }
 
-void Application::updateScriptBindings()
-{
-    for (auto it = mActiveScripts.begin(); it != mActiveScripts.end();)
-    {
-        auto& [_, script] = *it;
-        script.cleanup(script.state);
-        script.setup(script.state);
-    }
-}
-
 void Application::uiRenderActiveScripts()
 {
     if (ImGui::TreeNodeEx("Active Scripts", ImGuiTreeNodeFlags_DefaultOpen))
@@ -680,6 +672,7 @@ void Application::uiRenderActiveScripts()
             {
                 script.onDetach();
                 script.cleanup(script.state);
+                script.state.script("layer = nil");
                 it = mActiveScripts.erase(it);
             }
             else
