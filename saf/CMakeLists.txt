@@ -17,6 +17,7 @@ target_link_libraries(saf
     Vulkan::Vulkan
     Eigen3::Eigen
     imgui
+    lua::lua
     PRIVATE
     glfw
 )
@@ -24,6 +25,7 @@ target_link_libraries(saf
 target_include_directories(saf
     PUBLIC
     ${SAF_INCLUDE_DIR}
+    ${sol2_SOURCE_DIR}/include
 )
 
 set(SAF_PRECOMPILED_HEADER

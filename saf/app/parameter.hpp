@@ -12,6 +12,8 @@
 #define PARAMETER_HPP
 
 #include <imgui.h>
+#define SOL_ALL_SAFETIES_ON 1
+#include <sol/sol.hpp>
 
 namespace saf
 {
@@ -19,7 +21,6 @@ namespace saf
     class Parameter
     {
     public:
-
         virtual ~Parameter() = default;
 
         const Str& name() const { return mName; }
@@ -50,7 +51,6 @@ namespace saf
     class ParameterBlock : public Parameter<T>
     {
     public:
-
         virtual ~ParameterBlock() = default;
 
         constexpr U32 getParameterCount() const
@@ -89,8 +89,6 @@ namespace saf
         {
         }
     };
-
-
 
     class ByteParameter : public Parameter<Byte>
     {
@@ -953,6 +951,162 @@ namespace saf
         std::vector<char> mBuf;
     };
 
+    namespace detail
+    {
+        inline void setupParametersInLuaState(sol::state& state)
+        {
+            state.new_usertype<ByteParameter>("ByteParameter",
+                                              "get", sol::resolve<const Byte&() const>(&ByteParameter::get),
+                                              "set", &ByteParameter::set);
+
+            state.new_usertype<I16Parameter>("I16Parameter",
+                                             "get", sol::resolve<const I16&() const>(&I16Parameter::get),
+                                             "set", &I16Parameter::set);
+
+            state.new_usertype<I32Parameter>("I32Parameter",
+                                             "get", sol::resolve<const I32&() const>(&I32Parameter::get),
+                                             "set", &I32Parameter::set);
+
+            state.new_usertype<I64Parameter>("I64Parameter",
+                                             "get", sol::resolve<const I64&() const>(&I64Parameter::get),
+                                             "set", &I64Parameter::set);
+
+            state.new_usertype<U16Parameter>("U16Parameter",
+                                             "get", sol::resolve<const U16&() const>(&U16Parameter::get),
+                                             "set", &U16Parameter::set);
+
+            state.new_usertype<U32Parameter>("U32Parameter",
+                                             "get", sol::resolve<const U32&() const>(&U32Parameter::get),
+                                             "set", &U32Parameter::set);
+
+            state.new_usertype<U64Parameter>("U64Parameter",
+                                             "get", sol::resolve<const U64&() const>(&U64Parameter::get),
+                                             "set", &U64Parameter::set);
+
+            state.new_usertype<F32Parameter>("F32Parameter",
+                                             "get", sol::resolve<const F32&() const>(&F32Parameter::get),
+                                             "set", &F32Parameter::set);
+
+            state.new_usertype<F64Parameter>("F64Parameter",
+                                             "get", sol::resolve<const F64&() const>(&F64Parameter::get),
+                                             "set", &F64Parameter::set);
+
+            // TODO: Implement Lua for Eigen Types
+            /*
+            state.new_usertype<Vec2Parameter>("Vec2Parameter",
+                                              "get", sol::resolve<const Vec2&() const>(&Vec2Parameter::get),
+                                              "set", &Vec2Parameter::set);
+
+            state.new_usertype<Vec3Parameter>("Vec3Parameter",
+                                              "get", sol::resolve<const Vec3&() const>(&Vec3Parameter::get),
+                                              "set", &Vec3Parameter::set);
+
+            state.new_usertype<Vec4Parameter>("Vec4Parameter",
+                                              "get", sol::resolve<const Vec4&() const>(&Vec4Parameter::get),
+                                              "set", &Vec4Parameter::set);
+
+            state.new_usertype<Mat2Parameter>("Mat2Parameter",
+                                              "get", sol::resolve<const Mat2&() const>(&Mat2Parameter::get),
+                                              "set", &Mat2Parameter::set);
+
+            state.new_usertype<Mat3Parameter>("Mat3Parameter",
+                                              "get", sol::resolve<const Mat3&() const>(&Mat3Parameter::get),
+                                              "set", &Mat3Parameter::set);
+
+            state.new_usertype<Mat4Parameter>("Mat4Parameter",
+                                              "get", sol::resolve<const Mat4&() const>(&Mat4Parameter::get),
+                                              "set", &Mat4Parameter::set);
+
+            state.new_usertype<QuatParameter>("QuatParameter",
+                                              "get", sol::resolve<const Quat&() const>(&QuatParameter::get),
+                                              "set", &QuatParameter::set);
+
+            state.new_usertype<DVec2Parameter>("DVec2Parameter",
+                                               "get", sol::resolve<const DVec2&() const>(&DVec2Parameter::get),
+                                               "set", &DVec2Parameter::set);
+
+            state.new_usertype<DVec3Parameter>("DVec3Parameter",
+                                               "get", sol::resolve<const DVec3&() const>(&DVec3Parameter::get),
+                                               "set", &DVec3Parameter::set);
+
+            state.new_usertype<DVec4Parameter>("DVec4Parameter",
+                                               "get", sol::resolve<const DVec4&() const>(&DVec4Parameter::get),
+                                               "set", &DVec4Parameter::set);
+
+            state.new_usertype<DMat2Parameter>("DMat2Parameter",
+                                               "get", sol::resolve<const DMat2&() const>(&DMat2Parameter::get),
+                                               "set", &DMat2Parameter::set);
+
+            state.new_usertype<DMat3Parameter>("DMat3Parameter",
+                                               "get", sol::resolve<const DMat3&() const>(&DMat3Parameter::get),
+                                               "set", &DMat3Parameter::set);
+
+            state.new_usertype<DMat4Parameter>("DMat4Parameter",
+                                               "get", sol::resolve<const DMat4&() const>(&DMat4Parameter::get),
+                                               "set", &DMat4Parameter::set);
+
+            state.new_usertype<DQuatParameter>("DQuatParameter",
+                                               "get", sol::resolve<const DQuat&() const>(&DQuatParameter::get),
+                                               "set", &DQuatParameter::set);
+
+            state.new_usertype<IVec2Parameter>("IVec2Parameter",
+                                               "get", sol::resolve<const IVec2&() const>(&IVec2Parameter::get),
+                                               "set", &IVec2Parameter::set);
+
+            state.new_usertype<IVec3Parameter>("IVec3Parameter",
+                                               "get", sol::resolve<const IVec3&() const>(&IVec3Parameter::get),
+                                               "set", &IVec3Parameter::set);
+
+            state.new_usertype<IVec4Parameter>("IVec4Parameter",
+                                               "get", sol::resolve<const IVec4&() const>(&IVec4Parameter::get),
+                                               "set", &IVec4Parameter::set);
+
+            state.new_usertype<IMat2Parameter>("IMat2Parameter",
+                                               "get", sol::resolve<const IMat2&() const>(&IMat2Parameter::get),
+                                               "set", &IMat2Parameter::set);
+
+            state.new_usertype<IMat3Parameter>("IMat3Parameter",
+                                               "get", sol::resolve<const IMat3&() const>(&IMat3Parameter::get),
+                                               "set", &IMat3Parameter::set);
+
+            state.new_usertype<IMat4Parameter>("IMat4Parameter",
+                                               "get", sol::resolve<const IMat4&() const>(&IMat4Parameter::get),
+                                               "set", &IMat4Parameter::set);
+
+            state.new_usertype<UVec2Parameter>("UVec2Parameter",
+                                               "get", sol::resolve<const UVec2&() const>(&UVec2Parameter::get),
+                                               "set", &UVec2Parameter::set);
+
+            state.new_usertype<UVec3Parameter>("UVec3Parameter",
+                                               "get", sol::resolve<const UVec3&() const>(&UVec3Parameter::get),
+                                               "set", &UVec3Parameter::set);
+
+            state.new_usertype<UVec4Parameter>("UVec4Parameter",
+                                               "get", sol::resolve<const UVec4&() const>(&UVec4Parameter::get),
+                                               "set", &UVec4Parameter::set);
+
+            state.new_usertype<UMat2Parameter>("UMat2Parameter",
+                                               "get", sol::resolve<const UMat2&() const>(&UMat2Parameter::get),
+                                               "set", &UMat2Parameter::set);
+
+            state.new_usertype<UMat3Parameter>("UMat3Parameter",
+                                               "get", sol::resolve<const UMat3&() const>(&UMat3Parameter::get),
+                                               "set", &UMat3Parameter::set);
+
+            state.new_usertype<UMat4Parameter>("UMat4Parameter",
+                                               "get", sol::resolve<const UMat4&() const>(&UMat4Parameter::get),
+                                               "set", &UMat4Parameter::set);
+            */
+
+            state.new_usertype<BoolParameter>("BoolParameter",
+                                              "get", sol::resolve<const bool&() const>(&BoolParameter::get),
+                                              "set", &BoolParameter::set);
+
+            state.new_usertype<StrParameter>("StrParameter",
+                                             "get", sol::resolve<const Str&() const>(&StrParameter::get),
+                                             "set", &StrParameter::set);
+        }
+    } // namespace detail
 } // namespace saf
 
 #endif // PARAMETER_HPP

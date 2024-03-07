@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.26)
 project(SAF
     VERSION 0.01
     DESCRIPTION "Small Application Framework."
-    LANGUAGES CXX
+    LANGUAGES CXX C
 )
 
 set(CMAKE_COLOR_MAKEFILE ON)
@@ -101,20 +101,41 @@ FetchContent_Declare(
 )
 
 # pybind11
-#FetchContent_Declare(
-#    pybind11
-#    GIT_REPOSITORY https://github.com/pybind/pybind11
-#    GIT_TAG v2.11.1
-#)
-#set(PYBIND11_FINDPYTHON CACHE INTERNAL false)
-#set(PYBIND11_INSTALL CACHE INTERNAL false)
-#set(PYBIND11_INTERNALS_VERSION CACHE INTERNAL "")
-#set(PYBIND11_NOPYTHON CACHE INTERNAL false)
-#set(PYBIND11_PYTHON_VERSION CACHE INTERNAL "")
-#set(PYBIND11_TEST CACHE INTERNAL false)
-#set(pybind11_DIR CACHE INTERNAL "")
+# FetchContent_Declare(
+# pybind11
+# GIT_REPOSITORY https://github.com/pybind/pybind11
+# GIT_TAG v2.11.1
+# )
+# set(PYBIND11_FINDPYTHON CACHE INTERNAL false)
+# set(PYBIND11_INSTALL CACHE INTERNAL false)
+# set(PYBIND11_INTERNALS_VERSION CACHE INTERNAL "")
+# set(PYBIND11_NOPYTHON CACHE INTERNAL false)
+# set(PYBIND11_PYTHON_VERSION CACHE INTERNAL "")
+# set(PYBIND11_TEST CACHE INTERNAL false)
+# set(pybind11_DIR CACHE INTERNAL "")
 
-FetchContent_MakeAvailable(imgui eigen glfw)# pybind11)
+# ----- Lua -----
+FetchContent_Declare(lua
+    GIT_REPOSITORY https://github.com/lua/lua.git
+    GIT_TAG v5.4.6
+    GIT_SHALLOW ON
+    GIT_PROGRESS ON
+)
+FetchContent_GetProperties(lua)
+
+if(NOT cpputest_POPULATED)
+    FetchContent_Populate(lua)
+endif()
+
+# ----- Sol2 -----
+FetchContent_Declare(sol2
+    GIT_REPOSITORY https://github.com/ThePhD/sol2.git
+    GIT_TAG v3.3.0
+    GIT_SHALLOW ON
+    GIT_PROGRESS ON
+)
+
+FetchContent_MakeAvailable(imgui eigen glfw sol2) # pybind11)
 
 set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "Build the GLFW example programs")
 set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "Build the GLFW test programs")
@@ -139,6 +160,16 @@ target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
 set(CMAKE_MESSAGE_LOG_LEVEL ${CMAKE_MESSAGE_LOG_LEVEL_BACKUP})
 message(STATUS "Added dear imgui in: " ${imgui_SOURCE_DIR})
 
+file(GLOB_RECURSE LUA_SOURCES "${lua_SOURCE_DIR}/*.c")
+file(GLOB_RECURSE LUA_HEADER "${lua_SOURCE_DIR}/*.h")
+
+add_library(lua STATIC ${LUA_SOURCES} ${LUA_HEADER})
+target_include_directories(lua PUBLIC ${lua_SOURCE_DIR})
+add_library(lua::lua ALIAS lua)
+message(STATUS "Added Lua in: " ${lua_SOURCE_DIR})
+
+message(STATUS "Added Sol2 in: " ${sol2_SOURCE_DIR})
+
 unset(BUILD_TESTING CACHE)
 message(STATUS "Added Eigen in: " ${eigen_SOURCE_DIR})
 
@@ -160,7 +191,6 @@ set(SAF_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/saf)
 add_subdirectory(saf)
 
 # add_subdirectory(pysaf)
-
 add_subdirectory(examples)
 
 message(STATUS "Done!")

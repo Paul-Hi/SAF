@@ -12,7 +12,11 @@
 #define APPLICATION_HPP
 
 #include "layer.hpp"
+#include "parameter.hpp"
 #include <vector>
+
+#define SOL_ALL_SAFETIES_ON 1
+#include <sol/sol.hpp>
 
 struct GLFWwindow;
 
@@ -45,7 +49,7 @@ namespace saf
          * @brief Constructs a @a Application.
          * @param[in] settings Settings to setup the application.
          */
-        Application(const ApplicationSettings &settings);
+        Application(const ApplicationSettings& settings);
 
         ~Application();
 
@@ -114,6 +118,52 @@ namespace saf
             mMenubarCallback = callback;
         }
 
+        struct Script
+        {
+            sol::state state;
+            sol::protected_function onAttach;
+            sol::protected_function onDetach;
+            sol::protected_function onUpdate;
+            std::function<void(sol::state&)> cleanup;
+        };
+
+        template <typename SetupFn, typename CleanupFn, typename LogFn>
+        inline void createScript(const Str& scriptName, const Str& scriptSource, const SetupFn& setup, const CleanupFn& cleanup, const LogFn& log)
+        {
+            Script script;
+
+            try
+            {
+                script.state.open_libraries(sol::lib::base);
+
+                detail::setupParametersInLuaState(script.state);
+
+                script.state["print"] = [&log](sol::object v)
+                {
+                    log(v.as<std::string>());
+                };
+
+                setup(script.state);
+                script.state.safe_script(scriptSource);
+
+                script.cleanup = cleanup;
+
+                script.onAttach = sol::protected_function(script.state["onAttach"], log);
+                script.onDetach = sol::protected_function(script.state["onDetach"], log);
+                script.onUpdate = sol::protected_function(script.state["onUpdate"], log);
+
+                script.onAttach();
+
+                mActiveScripts[scriptName] = std::move(script);
+            }
+            catch (const sol::error& e)
+            {
+                log(e.what());
+            }
+        }
+
+        void uiRenderActiveScripts();
+
     private:
         bool initVulkanGLFW();
         void shutdownVulkanGLFW();
@@ -128,10 +178,12 @@ namespace saf
 
         std::function<void()> mMenubarCallback;
 
-        GLFWwindow *mWindow;
-        struct VulkanContext *mVulkanContext;
+        GLFWwindow* mWindow;
+        struct VulkanContext* mVulkanContext;
 
         std::vector<std::unique_ptr<Layer>> mLayerStack;
+
+        std::unordered_map<std::string, Script> mActiveScripts;
     };
 } // namespace saf
 

@@ -16,13 +16,16 @@ public:
     {
         mData.resize(720 * 720, Eigen::Vector4<Byte>(255, 0, 0, 255));
         mImage = std::make_shared<Image>(application->getPhysicalDevice(), application->getDevice(), application->getQueue(), application->getCommandPool(), application->getCommandBuffer(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
+        application->createScript(
+            "TestScript", "function onAttach() print(\"onAttach\") end function onUpdate() print(\"onUpdate\") return true end function onDetach() print(\"onDetach\") end", [](sol::state&) {}, [](sol::state&) {}, [](const Str& msg)
+            { std::cout << "[Script] " << msg << std::endl; });
     }
 
     virtual void onDetach() override
     {
     }
 
-    virtual void onUpdate(Application* application) override
+    virtual void onUpdate(Application* application, float dt) override
     {
         if (mUpdate)
         {
@@ -46,7 +49,7 @@ public:
         }
     }
 
-    virtual void onUIRender() override
+    virtual void onUIRender(Application* application) override
     {
         ImGui::Begin("Random");
         F64 fr = static_cast<F64>(ImGui::GetIO().Framerate);
@@ -65,6 +68,10 @@ public:
 
         mTest.onUIRender();
 
+        ImGui::End();
+
+        ImGui::Begin("Scripting");
+        application->uiRenderActiveScripts();
         ImGui::End();
 
         UILog::get().render("Log");

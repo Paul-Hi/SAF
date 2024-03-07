@@ -46,13 +46,14 @@ namespace saf
          * @brief Called when @a Layer is updated by the application.
          * @param[in] application A pointer to the @a Application the @a Layer is updated by.
          */
-        virtual void onUpdate(class Application* application) { (void)application; }
+        virtual void onUpdate(class Application* application, float dt) { (void)application; }
 
         /**
          * @brief Called when the application is rendering the user interface.
+         * @param[in] application A pointer to the @a Application the @a Layer is updated by.
          * @details Can be used to submit custom ImGui windows.
          */
-        virtual void onUIRender() {}
+        virtual void onUIRender(Application* application) {}
     };
 } // namespace saf
 

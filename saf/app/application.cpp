@@ -532,9 +532,28 @@ void Application::run()
     {
         glfwPollEvents();
 
+        float dt = ImGui::GetIO().DeltaTime; // FIXME: delta time...
+
         for (auto& layer : mLayerStack)
         {
-            layer->onUpdate(this);
+            layer->onUpdate(this, dt);
+        }
+
+        for (auto it = mActiveScripts.begin(); it != mActiveScripts.end();)
+        {
+            auto& [_, script] = *it;
+            bool change       = script.onUpdate(dt);
+            if (!change)
+            {
+                script.onDetach();
+                script.cleanup(script.state);
+                script.state.collect_garbage();
+                it = mActiveScripts.erase(it);
+            }
+            else
+            {
+                it++;
+            }
         }
 
         if (gSwapChainRebuild)
@@ -587,7 +606,7 @@ void Application::run()
 
         for (auto& layer : mLayerStack)
         {
-            layer->onUIRender();
+            layer->onUIRender(this);
         }
 
         ImGui::End();
@@ -617,6 +636,14 @@ void Application::run()
             framePresent(mVulkanContext);
         }
     }
+
+    for (auto it = mActiveScripts.begin(); it != mActiveScripts.end();)
+    {
+        auto& [_, script] = *it;
+        script.onDetach();
+        script.cleanup(script.state);
+        it = mActiveScripts.erase(it);
+    }
 }
 
 void Application::close()
@@ -628,4 +655,29 @@ void Application::popLayer()
 {
     mLayerStack.back()->onDetach();
     mLayerStack.pop_back();
+}
+
+void Application::uiRenderActiveScripts()
+{
+    if (ImGui::TreeNodeEx("Active Scripts", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        for (auto it = mActiveScripts.begin(); it != mActiveScripts.end();)
+        {
+            auto& [file, script] = *it;
+            ImGui::Text("%s", file.c_str());
+            ImGui::SameLine(ImGui::GetWindowWidth() - 30);
+            if (ImGui::Button("X"))
+            {
+                script.onDetach();
+                script.cleanup(script.state);
+                it = mActiveScripts.erase(it);
+            }
+            else
+            {
+                it++;
+            }
+        }
+
+        ImGui::TreePop();
+    }
 }
