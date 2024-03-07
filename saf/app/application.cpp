@@ -657,6 +657,16 @@ void Application::popLayer()
     mLayerStack.pop_back();
 }
 
+void Application::updateScriptBindings()
+{
+    for (auto it = mActiveScripts.begin(); it != mActiveScripts.end();)
+    {
+        auto& [_, script] = *it;
+        script.cleanup(script.state);
+        script.setup(script.state);
+    }
+}
+
 void Application::uiRenderActiveScripts()
 {
     if (ImGui::TreeNodeEx("Active Scripts", ImGuiTreeNodeFlags_DefaultOpen))

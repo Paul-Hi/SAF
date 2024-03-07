@@ -124,6 +124,7 @@ namespace saf
             sol::protected_function onAttach;
             sol::protected_function onDetach;
             sol::protected_function onUpdate;
+            std::function<void(sol::state&)> setup;
             std::function<void(sol::state&)> cleanup;
         };
 
@@ -144,8 +145,10 @@ namespace saf
                 };
 
                 setup(script.state);
+
                 script.state.safe_script(scriptSource);
 
+                script.setup   = setup;
                 script.cleanup = cleanup;
 
                 script.onAttach = sol::protected_function(script.state["onAttach"], log);
@@ -161,6 +164,8 @@ namespace saf
                 log(e.what());
             }
         }
+
+        void updateScriptBindings();
 
         void uiRenderActiveScripts();
 
