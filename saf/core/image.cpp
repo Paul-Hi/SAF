@@ -18,6 +18,7 @@ Image::Image(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue qu
     , mHeight(height)
     , mFormat(format)
     , mDeviceRef(logicalDevice)
+    , mStagingBuffer(nullptr)
 {
     VkImageCreateInfo imageCreateInfo{};
     imageCreateInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -284,6 +285,7 @@ void Image::release()
         vkFreeMemory(mDeviceRef, mDeviceMemory, nullptr);
         vkDestroyBuffer(mDeviceRef, mStagingBuffer, nullptr);
         vkFreeMemory(mDeviceRef, mStagingBufferMemory, nullptr);
+        mStagingBuffer = nullptr;
     }
 }
 
