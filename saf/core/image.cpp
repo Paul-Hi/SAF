@@ -84,6 +84,7 @@ void Image::update(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQu
 
     if (mWidth != width || mHeight != height)
     {
+        vkDeviceWaitIdle(logicalDevice);
         mWidth  = width;
         mHeight = height;
         release();
