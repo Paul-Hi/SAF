@@ -13,6 +13,7 @@
 
 #include "layer.hpp"
 #include "parameter.hpp"
+#include <fstream>
 #include <vector>
 
 #define SOL_ALL_SAFETIES_ON 1
@@ -120,16 +121,22 @@ namespace saf
 
         struct Script
         {
+            Layer* layerPtr;
+            Str fileName;
+            Str scriptName;
+
+            bool running;
             sol::state state;
             sol::protected_function onAttach;
-            sol::protected_function onDetach;
             sol::protected_function onUpdate;
+            sol::protected_function onDetach;
             std::function<void(sol::state&)> setup;
             std::function<void(sol::state&)> cleanup;
+            std::function<void(const Str&)> log;
         };
 
-        template <typename Layer, typename SetupFn, typename CleanupFn, typename LogFn>
-        inline void createScript(Layer* layerPtr, const Str& scriptName, const Str& scriptSource, const SetupFn& setup, const CleanupFn& cleanup, const LogFn& log)
+        template <typename Layer, typename SetupFn, typename CleanupFn>
+        inline void createScript(Layer* layerPtr, const Str& fileName, const Str& scriptName, const SetupFn& setup, const CleanupFn cleanup, const std::function<void(const Str&)>& log)
         {
             Script script;
 
@@ -139,25 +146,41 @@ namespace saf
 
                 detail::setupParametersInLuaState(script.state);
 
-                script.state["print"] = [&log](sol::object v)
-                {
-                    log(v.as<std::string>());
-                };
-
                 setup(script.state);
 
                 script.state["layer"] = layerPtr;
 
-                script.state.safe_script(scriptSource);
+                std::stringstream sstream;
+                sstream << std::ifstream(fileName).rdbuf();
+                std::string scriptSource = sstream.str();
 
+                auto result = script.state.safe_script(scriptSource);
+
+                if (!result.valid())
+                {
+                    sol::error err = result;
+                    log(err.what());
+                    log("Unrecoverable error - removing script.");
+                    return;
+                }
+
+                script.layerPtr   = layerPtr;
+                script.fileName   = fileName;
+                script.scriptName = scriptName;
+                script.log        = log;
+
+                script.running = false;
                 script.setup   = setup;
                 script.cleanup = cleanup;
 
-                script.onAttach = sol::protected_function(script.state["onAttach"], log);
-                script.onDetach = sol::protected_function(script.state["onDetach"], log);
-                script.onUpdate = sol::protected_function(script.state["onUpdate"], log);
+                script.state["print"] = [log](sol::object v)
+                {
+                    log(v.as<std::string>());
+                };
 
-                script.onAttach();
+                script.onAttach = sol::protected_function(script.state["onAttach"], script.state["print"]);
+                script.onUpdate = sol::protected_function(script.state["onUpdate"], script.state["print"]);
+                script.onDetach = sol::protected_function(script.state["onDetach"], script.state["print"]);
 
                 mActiveScripts[scriptName] = std::move(script);
             }
@@ -188,7 +211,7 @@ namespace saf
 
         std::vector<std::unique_ptr<Layer>> mLayerStack;
 
-        std::unordered_map<std::string, Script> mActiveScripts;
+        std::map<std::string, Script> mActiveScripts;
     };
 } // namespace saf
 

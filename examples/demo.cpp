@@ -16,9 +16,9 @@ public:
     {
         mData.resize(720 * 720, Eigen::Vector4<Byte>(255, 0, 0, 255));
         mImage = std::make_shared<Image>(application->getPhysicalDevice(), application->getDevice(), application->getQueue(), application->getCommandPool(), application->getCommandBuffer(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
+        mRandom.set(RandGen(mSeed));
         application->createScript(
-            this,
-            "TestScript", "function onAttach() print(\"onAttach\") end function onUpdate() print(\"onUpdate\") return true end function onDetach() print(\"onDetach\") end", [](sol::state&) {}, [](sol::state&) {}, [](const Str& msg)
+            this, "./examples/scripts/test.lua", "TestScript", [](sol::state&) {}, [](sol::state&) {}, [](const Str& msg)
             { std::cout << "[Script] " << msg << std::endl; });
     }
 

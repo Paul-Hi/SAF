@@ -137,7 +137,7 @@ namespace saf
     class I32Parameter : public Parameter<I32>
     {
     public:
-        I32Parameter(const Str& name, const I32& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX)
+        I32Parameter(const Str& name, const I32& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX / 2)
             : Parameter<I32>(name, value)
             , mMin(min)
             , mMax(max)
@@ -203,7 +203,7 @@ namespace saf
     class U32Parameter : public Parameter<U32>
     {
     public:
-        U32Parameter(const Str& name, const U32& value, const U32& min = 0, const U32& max = UINT32_MAX)
+        U32Parameter(const Str& name, const U32& value, const U32& min = 0, const U32& max = UINT32_MAX / 2)
             : Parameter<U32>(name, value)
             , mMin(min)
             , mMax(max)
@@ -247,7 +247,7 @@ namespace saf
     class F32Parameter : public Parameter<F32>
     {
     public:
-        F32Parameter(const Str& name, const F32& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX)
+        F32Parameter(const Str& name, const F32& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX / 2)
             : Parameter<F32>(name, value)
             , mMin(min)
             , mMax(max)
@@ -269,7 +269,7 @@ namespace saf
     class F64Parameter : public Parameter<F64>
     {
     public:
-        F64Parameter(const Str& name, const F64& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX)
+        F64Parameter(const Str& name, const F64& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX / 2)
             : Parameter<F64>(name, value)
             , mMin(min)
             , mMax(max)
@@ -291,7 +291,7 @@ namespace saf
     class Vec2Parameter : public Parameter<Vec2>
     {
     public:
-        Vec2Parameter(const Str& name, const Vec2& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX)
+        Vec2Parameter(const Str& name, const Vec2& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX / 2)
             : Parameter<Vec2>(name, value)
             , mMin(min)
             , mMax(max)
@@ -313,7 +313,7 @@ namespace saf
     class Vec3Parameter : public Parameter<Vec3>
     {
     public:
-        Vec3Parameter(const Str& name, const Vec3& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX)
+        Vec3Parameter(const Str& name, const Vec3& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX / 2)
             : Parameter<Vec3>(name, value)
             , mMin(min)
             , mMax(max)
@@ -335,7 +335,7 @@ namespace saf
     class Vec4Parameter : public Parameter<Vec4>
     {
     public:
-        Vec4Parameter(const Str& name, const Vec4& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX)
+        Vec4Parameter(const Str& name, const Vec4& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX / 2)
             : Parameter<Vec4>(name, value)
             , mMin(min)
             , mMax(max)
@@ -357,7 +357,7 @@ namespace saf
     class Mat2Parameter : public Parameter<Mat2>
     {
     public:
-        Mat2Parameter(const Str& name, const Mat2& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX)
+        Mat2Parameter(const Str& name, const Mat2& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX / 2)
             : Parameter<Mat2>(name, value)
             , mMin(min)
             , mMax(max)
@@ -383,7 +383,7 @@ namespace saf
     class Mat3Parameter : public Parameter<Mat3>
     {
     public:
-        Mat3Parameter(const Str& name, const Mat3& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX)
+        Mat3Parameter(const Str& name, const Mat3& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX / 2)
             : Parameter<Mat3>(name, value)
             , mMin(min)
             , mMax(max)
@@ -410,7 +410,7 @@ namespace saf
     class Mat4Parameter : public Parameter<Mat4>
     {
     public:
-        Mat4Parameter(const Str& name, const Mat4& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX)
+        Mat4Parameter(const Str& name, const Mat4& value, const F32& min = FLT_MIN, const F32& max = FLT_MAX / 2)
             : Parameter<Mat4>(name, value)
             , mMin(min)
             , mMax(max)
@@ -454,7 +454,7 @@ namespace saf
     class DVec2Parameter : public Parameter<DVec2>
     {
     public:
-        DVec2Parameter(const Str& name, const DVec2& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX)
+        DVec2Parameter(const Str& name, const DVec2& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX / 2)
             : Parameter<DVec2>(name, value)
             , mMin(min)
             , mMax(max)
@@ -476,7 +476,7 @@ namespace saf
     class DVec3Parameter : public Parameter<DVec3>
     {
     public:
-        DVec3Parameter(const Str& name, const DVec3& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX)
+        DVec3Parameter(const Str& name, const DVec3& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX / 2)
             : Parameter<DVec3>(name, value)
             , mMin(min)
             , mMax(max)
@@ -498,7 +498,7 @@ namespace saf
     class DVec4Parameter : public Parameter<DVec4>
     {
     public:
-        DVec4Parameter(const Str& name, const DVec4& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX)
+        DVec4Parameter(const Str& name, const DVec4& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX / 2)
             : Parameter<DVec4>(name, value)
             , mMin(min)
             , mMax(max)
@@ -520,7 +520,7 @@ namespace saf
     class DMat2Parameter : public Parameter<DMat2>
     {
     public:
-        DMat2Parameter(const Str& name, const DMat2& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX)
+        DMat2Parameter(const Str& name, const DMat2& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX / 2)
             : Parameter<DMat2>(name, value)
             , mMin(min)
             , mMax(max)
@@ -546,7 +546,7 @@ namespace saf
     class DMat3Parameter : public Parameter<DMat3>
     {
     public:
-        DMat3Parameter(const Str& name, const DMat3& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX)
+        DMat3Parameter(const Str& name, const DMat3& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX / 2)
             : Parameter<DMat3>(name, value)
             , mMin(min)
             , mMax(max)
@@ -573,7 +573,7 @@ namespace saf
     class DMat4Parameter : public Parameter<DMat4>
     {
     public:
-        DMat4Parameter(const Str& name, const DMat4& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX)
+        DMat4Parameter(const Str& name, const DMat4& value, const F64& min = DBL_MIN, const F64& max = DBL_MAX / 2)
             : Parameter<DMat4>(name, value)
             , mMin(min)
             , mMax(max)
@@ -617,7 +617,7 @@ namespace saf
     class IVec2Parameter : public Parameter<IVec2>
     {
     public:
-        IVec2Parameter(const Str& name, const IVec2& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX)
+        IVec2Parameter(const Str& name, const IVec2& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX / 2)
             : Parameter<IVec2>(name, value)
             , mMin(min)
             , mMax(max)
@@ -639,7 +639,7 @@ namespace saf
     class IVec3Parameter : public Parameter<IVec3>
     {
     public:
-        IVec3Parameter(const Str& name, const IVec3& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX)
+        IVec3Parameter(const Str& name, const IVec3& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX / 2)
             : Parameter<IVec3>(name, value)
             , mMin(min)
             , mMax(max)
@@ -661,7 +661,7 @@ namespace saf
     class IVec4Parameter : public Parameter<IVec4>
     {
     public:
-        IVec4Parameter(const Str& name, const IVec4& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX)
+        IVec4Parameter(const Str& name, const IVec4& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX / 2)
             : Parameter<IVec4>(name, value)
             , mMin(min)
             , mMax(max)
@@ -683,7 +683,7 @@ namespace saf
     class IMat2Parameter : public Parameter<IMat2>
     {
     public:
-        IMat2Parameter(const Str& name, const IMat2& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX)
+        IMat2Parameter(const Str& name, const IMat2& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX / 2)
             : Parameter<IMat2>(name, value)
             , mMin(min)
             , mMax(max)
@@ -709,7 +709,7 @@ namespace saf
     class IMat3Parameter : public Parameter<IMat3>
     {
     public:
-        IMat3Parameter(const Str& name, const IMat3& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX)
+        IMat3Parameter(const Str& name, const IMat3& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX / 2)
             : Parameter<IMat3>(name, value)
             , mMin(min)
             , mMax(max)
@@ -736,7 +736,7 @@ namespace saf
     class IMat4Parameter : public Parameter<IMat4>
     {
     public:
-        IMat4Parameter(const Str& name, const IMat4& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX)
+        IMat4Parameter(const Str& name, const IMat4& value, const I32& min = INT32_MIN, const I32& max = INT32_MAX / 2)
             : Parameter<IMat4>(name, value)
             , mMin(min)
             , mMax(max)
@@ -764,7 +764,7 @@ namespace saf
     class UVec2Parameter : public Parameter<UVec2>
     {
     public:
-        UVec2Parameter(const Str& name, const UVec2& value, const U32& min = 0, const U32& max = UINT32_MAX)
+        UVec2Parameter(const Str& name, const UVec2& value, const U32& min = 0, const U32& max = UINT32_MAX / 2)
             : Parameter<UVec2>(name, value)
             , mMin(min)
             , mMax(max)
@@ -786,7 +786,7 @@ namespace saf
     class UVec3Parameter : public Parameter<UVec3>
     {
     public:
-        UVec3Parameter(const Str& name, const UVec3& value, const U32& min = 0, const U32& max = UINT32_MAX)
+        UVec3Parameter(const Str& name, const UVec3& value, const U32& min = 0, const U32& max = UINT32_MAX / 2)
             : Parameter<UVec3>(name, value)
             , mMin(min)
             , mMax(max)
@@ -808,7 +808,7 @@ namespace saf
     class UVec4Parameter : public Parameter<UVec4>
     {
     public:
-        UVec4Parameter(const Str& name, const UVec4& value, const U32& min = 0, const U32& max = UINT32_MAX)
+        UVec4Parameter(const Str& name, const UVec4& value, const U32& min = 0, const U32& max = UINT32_MAX / 2)
             : Parameter<UVec4>(name, value)
             , mMin(min)
             , mMax(max)
@@ -830,7 +830,7 @@ namespace saf
     class UMat2Parameter : public Parameter<UMat2>
     {
     public:
-        UMat2Parameter(const Str& name, const UMat2& value, const U32& min = 0, const U32& max = UINT32_MAX)
+        UMat2Parameter(const Str& name, const UMat2& value, const U32& min = 0, const U32& max = UINT32_MAX / 2)
             : Parameter<UMat2>(name, value)
             , mMin(min)
             , mMax(max)
@@ -856,7 +856,7 @@ namespace saf
     class UMat3Parameter : public Parameter<UMat3>
     {
     public:
-        UMat3Parameter(const Str& name, const UMat3& value, const U32& min = 0, const U32& max = UINT32_MAX)
+        UMat3Parameter(const Str& name, const UMat3& value, const U32& min = 0, const U32& max = UINT32_MAX / 2)
             : Parameter<UMat3>(name, value)
             , mMin(min)
             , mMax(max)
@@ -883,7 +883,7 @@ namespace saf
     class UMat4Parameter : public Parameter<UMat4>
     {
     public:
-        UMat4Parameter(const Str& name, const UMat4& value, const U32& min = 0, const U32& max = UINT32_MAX)
+        UMat4Parameter(const Str& name, const UMat4& value, const U32& min = 0, const U32& max = UINT32_MAX / 2)
             : Parameter<UMat4>(name, value)
             , mMin(min)
             , mMax(max)

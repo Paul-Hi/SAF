@@ -542,17 +542,28 @@ void Application::run()
         for (auto it = mActiveScripts.begin(); it != mActiveScripts.end();)
         {
             auto& [_, script] = *it;
-            bool change       = script.onUpdate(dt);
-            if (!change)
+            if (!script.running)
             {
+                it++;
+                continue;
+            }
+
+            auto callResult = script.onUpdate(dt);
+            if (!callResult.valid())
+            {
+                callResult.abandon();
                 script.onDetach();
-                script.cleanup(script.state);
-                script.state.script("layer = nil");
-                script.state.collect_garbage();
-                it = mActiveScripts.erase(it);
+                script.running = false;
             }
             else
             {
+                bool change = callResult;
+                if (!change)
+                {
+                    script.onDetach();
+                    script.running = false;
+                }
+
                 it++;
             }
         }
@@ -666,21 +677,52 @@ void Application::uiRenderActiveScripts()
         for (auto it = mActiveScripts.begin(); it != mActiveScripts.end();)
         {
             auto& [file, script] = *it;
-            ImGui::Text("%s", file.c_str());
-            ImGui::SameLine(ImGui::GetWindowWidth() - 30);
-            if (ImGui::Button("X"))
+            ImGui::PushID(ImGui::GetID(file.c_str()));
+            ImGui::Columns(2);
+            ImGui::BulletText("%s", file.c_str());
+            ImGui::NextColumn();
+            if (script.running && ImGui::SmallButton("Stop"))
             {
                 script.onDetach();
-                script.cleanup(script.state);
-                script.state.script("layer = nil");
-                it = mActiveScripts.erase(it);
+                script.running = false;
             }
-            else
+            else if (!script.running)
             {
-                it++;
-            }
-        }
+                if (ImGui::SmallButton("Run"))
+                {
+                    auto callResult = script.onAttach();
+                    if (!callResult.valid())
+                    {
+                        callResult.abandon();
+                        continue;
+                    }
 
+                    script.running = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Reload"))
+                {
+                    script.cleanup(script.state);
+                    script.state.script("layer = nil");
+                    Script cpy = std::move(script);
+                    it         = mActiveScripts.erase(it);
+                    createScript(cpy.layerPtr, cpy.fileName, cpy.scriptName, cpy.setup, cpy.cleanup, cpy.log);
+                    continue;
+                }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Unload"))
+                {
+                    script.cleanup(script.state);
+                    script.state.script("layer = nil");
+                    it = mActiveScripts.erase(it);
+                    continue;
+                }
+            }
+            ImGui::Columns();
+            ImGui::Separator();
+            ImGui::PopID();
+            it++;
+        }
         ImGui::TreePop();
     }
 }
