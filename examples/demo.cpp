@@ -17,8 +17,11 @@ public:
         mData.resize(720 * 720, Eigen::Vector4<Byte>(255, 0, 0, 255));
         mImage = std::make_shared<Image>(application->getPhysicalDevice(), application->getDevice(), application->getQueue(), application->getCommandPool(), application->getCommandBuffer(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
         mRandom.set(RandGen(mSeed));
-        application->createScript(
-            this, "./examples/scripts/test.lua", "TestScript", [](sol::state&) {}, [](sol::state&) {}, [](const Str& msg)
+        loadScript(
+            "TestScript",
+            "./examples/scripts/test.lua", [this](sol::state& state)
+            { state["mSeed"] = &mSeed; },
+            [](sol::state&) {}, [](const Str& msg)
             { std::cout << "[Script] " << msg << std::endl; });
     }
 

@@ -537,34 +537,10 @@ void Application::run()
         for (auto& layer : mLayerStack)
         {
             layer->onUpdate(this, dt);
-        }
 
-        for (auto it = mActiveScripts.begin(); it != mActiveScripts.end();)
-        {
-            auto& [_, script] = *it;
-            if (!script.running)
+            for (auto it = layer->mScripts.begin(); it != layer->mScripts.end(); it++)
             {
-                it++;
-                continue;
-            }
-
-            auto callResult = script.onUpdate(dt);
-            if (!callResult.valid())
-            {
-                callResult.abandon();
-                script.onDetach();
-                script.running = false;
-            }
-            else
-            {
-                bool change = callResult;
-                if (!change)
-                {
-                    script.onDetach();
-                    script.running = false;
-                }
-
-                it++;
+                layer->updateScript(it, dt);
             }
         }
 
@@ -649,13 +625,12 @@ void Application::run()
         }
     }
 
-    for (auto it = mActiveScripts.begin(); it != mActiveScripts.end();)
+    for (auto& layer : mLayerStack)
     {
-        auto& [_, script] = *it;
-        script.onDetach();
-        script.cleanup(script.state);
-        script.state.script("layer = nil");
-        it = mActiveScripts.erase(it);
+        for (auto it = layer->mScripts.begin(); it != layer->mScripts.end();)
+        {
+            layer->unloadScript(it);
+        }
     }
 }
 
@@ -674,54 +649,46 @@ void Application::uiRenderActiveScripts()
 {
     if (ImGui::TreeNodeEx("Active Scripts", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        for (auto it = mActiveScripts.begin(); it != mActiveScripts.end();)
+        for (auto& layer : mLayerStack)
         {
-            auto& [file, script] = *it;
-            ImGui::PushID(ImGui::GetID(file.c_str()));
-            ImGui::Columns(2);
-            ImGui::BulletText("%s", file.c_str());
-            ImGui::NextColumn();
-            if (script.running && ImGui::SmallButton("Stop"))
+            ImGui::PushID(ImGui::GetID(&layer));
+            for (auto it = layer->mScripts.begin(); it != layer->mScripts.end();)
             {
-                script.onDetach();
-                script.running = false;
-            }
-            else if (!script.running)
-            {
-                if (ImGui::SmallButton("Run"))
+                auto& [name, script] = *it;
+                ImGui::PushID(ImGui::GetID(name.c_str()));
+                ImGui::Columns(2);
+                ImGui::BulletText("%s", name.c_str());
+                ImGui::NextColumn();
+                if (script.running && ImGui::SmallButton("Stop"))
                 {
-                    auto callResult = script.onAttach();
-                    if (!callResult.valid())
+                    layer->stopScript(it);
+                    continue;
+                }
+                else if (!script.running)
+                {
+                    if (ImGui::SmallButton("Start"))
                     {
-                        callResult.abandon();
+                        layer->startScript(it);
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Reload"))
+                    {
+                        layer->reloadScript(it);
                         continue;
                     }
-
-                    script.running = true;
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Unload"))
+                    {
+                        layer->unloadScript(it);
+                        continue;
+                    }
                 }
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Reload"))
-                {
-                    script.cleanup(script.state);
-                    script.state.script("layer = nil");
-                    Script cpy = std::move(script);
-                    it         = mActiveScripts.erase(it);
-                    createScript(cpy.layerPtr, cpy.fileName, cpy.scriptName, cpy.setup, cpy.cleanup, cpy.log);
-                    continue;
-                }
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Unload"))
-                {
-                    script.cleanup(script.state);
-                    script.state.script("layer = nil");
-                    it = mActiveScripts.erase(it);
-                    continue;
-                }
+                ImGui::Columns();
+                ImGui::Separator();
+                ImGui::PopID();
+                it++;
             }
-            ImGui::Columns();
-            ImGui::Separator();
             ImGui::PopID();
-            it++;
         }
         ImGui::TreePop();
     }
