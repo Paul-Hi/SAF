@@ -74,6 +74,7 @@ namespace saf
 
             if (ImGui::TreeNode(this->mName.c_str()))
             {
+                ImGui::Spacing();
                 forEachParameter([&changed](auto&& p)
                                  { changed |= p->onUIRender(); });
 

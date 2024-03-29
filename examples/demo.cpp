@@ -101,7 +101,7 @@ int main(int argc, char** argv)
     ApplicationSettings settings;
     settings.windowWidth  = 1920;
     settings.windowHeight = 1080;
-    settings.fontSize     = 20.0f;
+    settings.fontSize     = 24.0f;
     settings.name         = "Demo";
     settings.clearColor   = Vec4(0.3f, 0.3f, 0.3f, 1.0f);
 
