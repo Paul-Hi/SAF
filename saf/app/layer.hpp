@@ -22,6 +22,35 @@ struct ImGui_ImplVulkanH_Window;
 
 namespace saf
 {
+
+    /**
+     * @brief Data for a lua script.
+     */
+    struct Script
+    {
+        /** @brief Name (ID) of the script. */
+        Str scriptName;
+        /** @brief Filename the script was loaded from. */
+        Str fileName;
+
+        /** @brief True if the script is running, else False. */
+        bool running;
+        /** @brief The scripts lua state. */
+        sol::state state;
+        /** @brief A lua function called on attach. */
+        sol::protected_function onAttach;
+        /** @brief A lua function called on update. */
+        sol::protected_function onUpdate;
+        /** @brief A lua function called on detach. */
+        sol::protected_function onDetach;
+        /** @brief A function used to setup the lua state. */
+        std::function<void(sol::state&)> setup;
+        /** @brief A function used to cleanup the lua state. */
+        std::function<void(sol::state&)> cleanup;
+        /** @brief A function used to log script output. */
+        std::function<void(const Str&)> log;
+    };
+
     /**
      * @brief @a Layer.
      */
@@ -60,21 +89,17 @@ namespace saf
          * @details Can be used to submit custom ImGui windows.
          */
         virtual void onUIRender(Application* application) {}
-        struct Script
-        {
-            Str scriptName;
-            Str fileName;
 
-            bool running;
-            sol::state state;
-            sol::protected_function onAttach;
-            sol::protected_function onUpdate;
-            sol::protected_function onDetach;
-            std::function<void(sol::state&)> setup;
-            std::function<void(sol::state&)> cleanup;
-            std::function<void(const Str&)> log;
-        };
-
+        /**
+         * @brief Loads a lua script from a file.
+         * @tparam SetupFn The type of @a setup.
+         * @tparam CleanupFn The type of @a cleanup.
+         * @param scriptName The name of the script used as ID.
+         * @param fileName The filename to load the code from.
+         * @param setup Function setting up the lua state.
+         * @param cleanup Function cleaning up the lua script.
+         * @param log A logging callback.
+         */
         template <typename SetupFn, typename CleanupFn>
         inline void loadScript(const Str& scriptName, const Str& fileName, const SetupFn& setup, const CleanupFn cleanup, const std::function<void(const Str&)>& log)
         {
@@ -127,6 +152,10 @@ namespace saf
             }
         }
 
+        /**
+         * @brief Unload a lua script.
+         * @param scriptName The name (ID) of the script.
+         */
         inline void unloadScript(const Str& scriptName)
         {
             auto it = mScripts.find(scriptName);
@@ -136,6 +165,10 @@ namespace saf
             }
         }
 
+        /**
+         * @brief Reload a lua script.
+         * @param scriptName The name (ID) of the script.
+         */
         inline void reloadScript(const Str& scriptName)
         {
             auto it = mScripts.find(scriptName);
@@ -145,6 +178,10 @@ namespace saf
             }
         }
 
+        /**
+         * @brief Start the execution of a lua script.
+         * @param scriptName The name (ID) of the script.
+         */
         inline void startScript(const Str& scriptName)
         {
             auto it = mScripts.find(scriptName);
@@ -154,6 +191,10 @@ namespace saf
             }
         }
 
+        /**
+         * @brief Stop the execution of a lua script.
+         * @param scriptName The name (ID) of the script.
+         */
         inline void stopScript(const Str& scriptName)
         {
             auto it = mScripts.find(scriptName);
@@ -165,7 +206,12 @@ namespace saf
 
     private:
         friend class Application;
-        inline void unloadScript(std::map<Str, Layer::Script>::iterator& it)
+
+        /**
+         * @brief Unload a lua script by an iterator.
+         * @param it The iterator pointing to a script.
+         */
+        inline void unloadScript(std::map<Str, Script>::iterator& it)
         {
             Script& script = it->second;
 
@@ -176,7 +222,11 @@ namespace saf
             it = mScripts.erase(it);
         }
 
-        inline void reloadScript(std::map<Str, Layer::Script>::iterator& it)
+        /**
+         * @brief Reload a lua script by an iterator.
+         * @param it The iterator pointing to a script.
+         */
+        inline void reloadScript(std::map<Str, Script>::iterator& it)
         {
             Script& script = it->second;
             if (script.running)
@@ -193,7 +243,11 @@ namespace saf
             loadScript(backup.scriptName, backup.fileName, backup.setup, backup.cleanup, backup.log);
         }
 
-        inline void startScript(std::map<Str, Layer::Script>::iterator& it)
+        /**
+         * @brief Start the execution of a lua script identified by an iterator.
+         * @param it The iterator pointing to a script.
+         */
+        inline void startScript(std::map<Str, Script>::iterator& it)
         {
             Script& script = it->second;
             if (script.running)
@@ -211,7 +265,11 @@ namespace saf
             script.running = true;
         }
 
-        inline void stopScript(std::map<Str, Layer::Script>::iterator& it)
+        /**
+         * @brief Stop the execution of a lua script identified by an iterator.
+         * @param it The iterator pointing to a script.
+         */
+        inline void stopScript(std::map<Str, Script>::iterator& it)
         {
             Script& script = it->second;
             if (!script.running)
@@ -228,7 +286,12 @@ namespace saf
             script.running = false;
         }
 
-        inline void updateScript(std::map<Str, Layer::Script>::iterator& it, F32 dt)
+        /**
+         * @brief Call the update function of a lua script identified by an iterator.
+         * @param it The iterator pointing to a script.
+         * @param dt Time in seconds since last call.
+         */
+        inline void updateScript(std::map<Str, Script>::iterator& it, F32 dt)
         {
             Script& script = it->second;
             if (!script.running)
@@ -252,6 +315,7 @@ namespace saf
             }
         }
 
+        /** @brief Map of loaded scripts, name to script data.*/
         std::map<Str, Script> mScripts;
     };
 } // namespace saf

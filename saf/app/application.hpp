@@ -114,25 +114,44 @@ namespace saf
             mMenubarCallback = callback;
         }
 
+        /**
+         * @brief Renders information about all active lua scripts.
+         */
         void uiRenderActiveScripts();
 
     private:
+        /**
+         * @brief Initializes Vulkan and GLFW.
+         */
         bool initVulkanGLFW();
+        /**
+         * @brief Shuts down Vulkan and GLFW.
+         */
         void shutdownVulkanGLFW();
 
     private:
+        /** @brief The @a Applications name. */
         Str mName;
+        /** @brief The @a Applications window width. */
         I32 mWindowWidth;
+        /** @brief The @a Applications window height. */
         I32 mWindowHeight;
+        /** @brief The @a Applications font size. */
         F32 mFontSize;
+        /** @brief The @a Applications clear color. */
         Vec4 mClearColor;
+        /** @brief True, if the @a Application is running, else False. */
         bool mRunning;
 
+        /** @brief The @a Applications menubar callback. */
         std::function<void()> mMenubarCallback;
 
+        /** @brief The @a Applications window handle. */
         GLFWwindow* mWindow;
+        /** @brief The @a Applications vulkan context. */
         struct VulkanContext* mVulkanContext;
 
+        /** @brief The @a Applications layer stack. */
         std::vector<std::unique_ptr<Layer>> mLayerStack;
     };
 } // namespace saf

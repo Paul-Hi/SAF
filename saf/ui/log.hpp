@@ -15,10 +15,17 @@
 
 namespace saf
 {
-    // Simple Log, similar to ImGui demo
+    /**
+     * @brief Simple UI Logger
+     * @details Similar to ImGui
+     */
     class UILog
     {
     public:
+        /**
+         * @brief Retrieve the static instance of the @a UILog.
+         * @return Reference to the static instance of the @a UILog.
+         */
         static UILog& get()
         {
             static UILog log;
@@ -28,6 +35,9 @@ namespace saf
 
         ~UILog() = default;
 
+        /**
+         * @brief Clears the Log window of all logged lines.
+         */
         void clearLog()
         {
             mBuffer.clear();
@@ -35,6 +45,10 @@ namespace saf
             mLineOffsets.push_back(0);
         }
 
+        /**
+         * @brief Writes formated message to the log.
+         * @param[in] fmt The formatted message
+         */
         void add(const char* fmt, ...) IM_FMTARGS(2)
         {
             int oldSize = mBuffer.size();
@@ -55,6 +69,11 @@ namespace saf
             }
         }
 
+        /**
+         * @brief Renders the ImGui window for the @a UILog.
+         * @param title The title of the ImGui window.
+         * @param pOpen Passing pOpen != NULL shows a window-closing widget in the upper-right corner of the window, which clicking will set the boolean to false when clicked.
+         */
         void render(const char* title, bool* pOpen = NULL)
         {
             if (!ImGui::Begin(title, pOpen))
@@ -135,15 +154,22 @@ namespace saf
         }
 
     private:
+        /**
+         * @brief Construct a new @a UILog object.
+         */
         UILog()
         {
             mAutoScroll = true;
             clearLog();
         }
 
+        /** @brief The ImGuiTextBuffer of the @a UILog. */
         ImGuiTextBuffer mBuffer;
+        /** @brief The ImGuiTextFilter of the @a UILog. */
         ImGuiTextFilter mFilter;
+        /** @brief A list of line offsets */
         ImVector<int> mLineOffsets;
+        /** @brief True if @a UILog should scroll automatically, else False. */
         bool mAutoScroll;
     };
 } // namespace saf
