@@ -82,6 +82,15 @@ FetchContent_Declare(
     GIT_PROGRESS ON
 )
 
+# implot
+FetchContent_Declare(
+    implot
+    GIT_REPOSITORY https://github.com/epezent/implot
+    GIT_TAG v0.16
+    GIT_SHALLOW ON
+    GIT_PROGRESS ON
+)
+
 # Eigen
 FetchContent_Declare(eigen
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
@@ -135,7 +144,7 @@ FetchContent_Declare(sol2
     GIT_PROGRESS ON
 )
 
-FetchContent_MakeAvailable(imgui eigen glfw sol2) # pybind11)
+FetchContent_MakeAvailable(imgui implot eigen glfw sol2) # pybind11)
 
 set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "Build the GLFW example programs")
 set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "Build the GLFW test programs")
@@ -152,13 +161,18 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
+
+    ${implot_SOURCE_DIR}/implot.cpp
+    ${implot_SOURCE_DIR}/implot_demo.cpp
+    ${implot_SOURCE_DIR}/implot_items.cpp
 )
-target_include_directories(imgui PUBLIC . ${glfw_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS} ${imgui_SOURCE_DIR})
+target_include_directories(imgui PUBLIC . ${glfw_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS} ${imgui_SOURCE_DIR} ${implot_SOURCE_DIR})
 target_link_directories(imgui PRIVATE ${CMAKE_BINARY_DIR})
 target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
 
 set(CMAKE_MESSAGE_LOG_LEVEL ${CMAKE_MESSAGE_LOG_LEVEL_BACKUP})
 message(STATUS "Added dear imgui in: " ${imgui_SOURCE_DIR})
+message(STATUS "Added implot in: " ${implot_SOURCE_DIR})
 
 file(GLOB_RECURSE LUA_SOURCES "${lua_SOURCE_DIR}/*.c")
 file(GLOB_RECURSE LUA_HEADER "${lua_SOURCE_DIR}/*.h")

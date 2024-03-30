@@ -4,6 +4,7 @@
 #include <app/parameter.hpp>
 #include <core/image.hpp>
 #include <imgui.h>
+#include <implot.h>
 #include <ui/imguiBackend.hpp>
 #include <ui/log.hpp>
 

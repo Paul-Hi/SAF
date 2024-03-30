@@ -9,6 +9,7 @@
 #include "application.hpp"
 #include <core/immediateSubmit.hpp>
 #include <core/vulkanHelper.hpp>
+#include <implot.h>
 #include <ui/guiStyle.hpp>
 #include <ui/imguiBackend.hpp>
 
@@ -437,6 +438,7 @@ bool Application::initVulkanGLFW()
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    ImPlot::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
@@ -492,6 +494,7 @@ void Application::shutdownVulkanGLFW()
     checkVkResult(err);
     vkShutdown();
     ImGui_ImplGlfw_Shutdown();
+    ImPlot::DestroyContext();
     ImGui::DestroyContext();
 
     cleanupVulkanWindow();
