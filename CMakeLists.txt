@@ -22,6 +22,8 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
 option(SAF_BUILD_DOC "Build Documentation" OFF)
+option(SAF_ENABLE_SCRIPTING "Enable Lua Scripting" OFF)
+option(SAF_ENABLE_FILE_WATCH "Enable File Watching" OFF)
 
 set(VERSION_MAJOR 0 CACHE STRING "Project major version number.")
 set(VERSION_MINOR 0 CACHE STRING "Project minor version number.")
@@ -109,6 +111,8 @@ FetchContent_Declare(
     GIT_PROGRESS ON
 )
 
+FetchContent_MakeAvailable(imgui implot eigen glfw)
+
 # pybind11
 # FetchContent_Declare(
 # pybind11
@@ -122,29 +126,40 @@ FetchContent_Declare(
 # set(PYBIND11_PYTHON_VERSION CACHE INTERNAL "")
 # set(PYBIND11_TEST CACHE INTERNAL false)
 # set(pybind11_DIR CACHE INTERNAL "")
+if(SAF_ENABLE_SCRIPTING)
+    # ----- Lua -----
+    FetchContent_Declare(lua
+        GIT_REPOSITORY https://github.com/lua/lua.git
+        GIT_TAG v5.4.6
+        GIT_SHALLOW ON
+        GIT_PROGRESS ON
+    )
+    FetchContent_GetProperties(lua)
 
-# ----- Lua -----
-FetchContent_Declare(lua
-    GIT_REPOSITORY https://github.com/lua/lua.git
-    GIT_TAG v5.4.6
-    GIT_SHALLOW ON
-    GIT_PROGRESS ON
-)
-FetchContent_GetProperties(lua)
+    if(NOT cpputest_POPULATED)
+        FetchContent_Populate(lua)
+    endif()
 
-if(NOT cpputest_POPULATED)
-    FetchContent_Populate(lua)
+    # ----- Sol2 -----
+    FetchContent_Declare(sol2
+        GIT_REPOSITORY https://github.com/ThePhD/sol2.git
+        GIT_TAG v3.3.0
+        GIT_SHALLOW ON
+        GIT_PROGRESS ON
+    )
+    FetchContent_MakeAvailable(sol2)
 endif()
 
-# ----- Sol2 -----
-FetchContent_Declare(sol2
-    GIT_REPOSITORY https://github.com/ThePhD/sol2.git
-    GIT_TAG v3.3.0
-    GIT_SHALLOW ON
-    GIT_PROGRESS ON
-)
-
-FetchContent_MakeAvailable(imgui implot eigen glfw sol2) # pybind11)
+if(SAF_ENABLE_FILE_WATCH)
+    # ----- efsw -----
+    FetchContent_Declare(efsw
+        GIT_REPOSITORY https://github.com/SpartanJ/efsw
+        GIT_TAG 341934765471e4074e90bb5205ff4a65c16499c6
+        GIT_SHALLOW ON
+        GIT_PROGRESS ON
+    )
+    FetchContent_MakeAvailable(efsw)
+endif()
 
 set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "Build the GLFW example programs")
 set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "Build the GLFW test programs")
@@ -174,18 +189,24 @@ set(CMAKE_MESSAGE_LOG_LEVEL ${CMAKE_MESSAGE_LOG_LEVEL_BACKUP})
 message(STATUS "Added dear imgui in: " ${imgui_SOURCE_DIR})
 message(STATUS "Added implot in: " ${implot_SOURCE_DIR})
 
-file(GLOB_RECURSE LUA_SOURCES "${lua_SOURCE_DIR}/*.c")
-file(GLOB_RECURSE LUA_HEADER "${lua_SOURCE_DIR}/*.h")
-
-add_library(lua STATIC ${LUA_SOURCES} ${LUA_HEADER})
-target_include_directories(lua PUBLIC ${lua_SOURCE_DIR})
-add_library(lua::lua ALIAS lua)
-message(STATUS "Added Lua in: " ${lua_SOURCE_DIR})
-
-message(STATUS "Added Sol2 in: " ${sol2_SOURCE_DIR})
-
 unset(BUILD_TESTING CACHE)
 message(STATUS "Added Eigen in: " ${eigen_SOURCE_DIR})
+
+if(SAF_ENABLE_SCRIPTING)
+    file(GLOB_RECURSE LUA_SOURCES "${lua_SOURCE_DIR}/*.c")
+    file(GLOB_RECURSE LUA_HEADER "${lua_SOURCE_DIR}/*.h")
+
+    add_library(lua STATIC ${LUA_SOURCES} ${LUA_HEADER})
+    target_include_directories(lua PUBLIC ${lua_SOURCE_DIR})
+    add_library(lua::lua ALIAS lua)
+    message(STATUS "Added Lua in: " ${lua_SOURCE_DIR})
+
+    message(STATUS "Added Sol2 in: " ${sol2_SOURCE_DIR})
+endif()
+
+if(SAF_ENABLE_FILE_WATCH)
+    message(STATUS "Added efsw in: " ${efsw_SOURCE_DIR})
+endif()
 
 if(SAF_BUILD_DOC)
     find_package(Doxygen REQUIRED dot)

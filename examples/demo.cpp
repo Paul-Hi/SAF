@@ -18,12 +18,14 @@ public:
         mData.resize(720 * 720, Eigen::Vector4<Byte>(255, 0, 0, 255));
         mImage = std::make_shared<Image>(application->getPhysicalDevice(), application->getDevice(), application->getQueue(), application->getCommandPool(), application->getCommandBuffer(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
         mRandom.set(RandGen(mSeed));
+#ifdef SAF_SCRIPTING
         loadScript(
             "TestScript",
             "./examples/scripts/test.lua", [this](sol::state& state)
             { state["mSeed"] = &mSeed; },
             [](sol::state&) {}, [](const Str& msg)
             { std::cout << "[Script] " << msg << std::endl; });
+#endif
     }
 
     virtual void onDetach() override
@@ -75,9 +77,11 @@ public:
 
         ImGui::End();
 
+#ifdef SAF_SCRIPTING
         ImGui::Begin("Scripting");
         application->uiRenderActiveScripts();
         ImGui::End();
+#endif
 
         UILog::get().render("Log");
     }

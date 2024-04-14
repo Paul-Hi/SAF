@@ -12,6 +12,8 @@ using namespace saf;
 
 namespace sol
 {
+#ifdef SAF_SCRIPTING
+
 #define DISABLE_SOL_BREAKING_MATRICES(Type)       \
     template <>                                   \
     struct is_automagical<Type> : std::false_type \
@@ -199,4 +201,5 @@ void saf::setupParametersInLuaState(sol::state& state)
 
     new_parameter_user_type<BoolParameter, bool>("BoolParameter", state);
     new_parameter_user_type<StrParameter, Str>("StrParameter", state);
+#endif
 }

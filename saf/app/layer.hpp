@@ -14,8 +14,10 @@
 #include "parameter.hpp"
 #include <fstream>
 
+#ifdef SAF_SCRIPTING
 #define SOL_ALL_SAFETIES_ON 1
 #include <sol/sol.hpp>
+#endif
 
 struct GLFWwindow;
 struct ImGui_ImplVulkanH_Window;
@@ -23,6 +25,7 @@ struct ImGui_ImplVulkanH_Window;
 namespace saf
 {
 
+#ifdef SAF_SCRIPTING
     /**
      * @brief Data for a lua script.
      */
@@ -50,6 +53,7 @@ namespace saf
         /** @brief A function used to log script output. */
         std::function<void(const Str&)> log;
     };
+#endif
 
     /**
      * @brief @a Layer.
@@ -90,6 +94,7 @@ namespace saf
          */
         virtual void onUIRender(Application* application) {}
 
+#ifdef SAF_SCRIPTING
         /**
          * @brief Loads a lua script from a file.
          * @tparam SetupFn The type of @a setup.
@@ -203,10 +208,12 @@ namespace saf
                 stopScript(it);
             }
         }
+#endif
 
     private:
         friend class Application;
 
+#ifdef SAF_SCRIPTING
         /**
          * @brief Unload a lua script by an iterator.
          * @param it The iterator pointing to a script.
@@ -317,6 +324,7 @@ namespace saf
 
         /** @brief Map of loaded scripts, name to script data.*/
         std::map<Str, Script> mScripts;
+#endif
     };
 } // namespace saf
 

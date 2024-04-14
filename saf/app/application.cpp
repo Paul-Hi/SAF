@@ -541,10 +541,12 @@ void Application::run()
         {
             layer->onUpdate(this, dt);
 
+#ifdef SAF_SCRIPTING
             for (auto it = layer->mScripts.begin(); it != layer->mScripts.end(); it++)
             {
                 layer->updateScript(it, dt);
             }
+#endif
         }
 
         if (gSwapChainRebuild)
@@ -628,6 +630,7 @@ void Application::run()
         }
     }
 
+#ifdef SAF_SCRIPTING
     for (auto& layer : mLayerStack)
     {
         for (auto it = layer->mScripts.begin(); it != layer->mScripts.end();)
@@ -635,6 +638,7 @@ void Application::run()
             layer->unloadScript(it);
         }
     }
+#endif
 }
 
 void Application::close()
@@ -648,6 +652,7 @@ void Application::popLayer()
     mLayerStack.pop_back();
 }
 
+#ifdef SAF_SCRIPTING
 void Application::uiRenderActiveScripts()
 {
     if (ImGui::TreeNodeEx("Active Scripts", ImGuiTreeNodeFlags_DefaultOpen))
@@ -696,3 +701,4 @@ void Application::uiRenderActiveScripts()
         ImGui::TreePop();
     }
 }
+#endif

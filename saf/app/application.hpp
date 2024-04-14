@@ -114,10 +114,12 @@ namespace saf
             mMenubarCallback = callback;
         }
 
+#ifdef SAF_SCRIPTING
         /**
          * @brief Renders information about all active lua scripts.
          */
         void uiRenderActiveScripts();
+#endif
 
     private:
         /**

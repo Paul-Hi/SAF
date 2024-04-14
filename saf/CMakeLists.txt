@@ -17,7 +17,7 @@ target_link_libraries(saf
     Vulkan::Vulkan
     Eigen3::Eigen
     imgui
-    lua::lua
+    $<$<BOOL:${SAF_ENABLE_SCRIPTING}>:lua::lua>
     PRIVATE
     glfw
 )
@@ -41,6 +41,8 @@ target_compile_definitions(saf
     PUBLIC
     $<$<CONFIG:Debug>:SAF_DEBUG>
     $<$<CXX_COMPILER_ID:MSVC>: _CRT_SECURE_NO_WARNINGS>
+    $<$<BOOL:${SAF_ENABLE_SCRIPTING}>:SAF_SCRIPTING>
+    $<$<BOOL:${SAF_ENABLE_FILE_WATCH}>:SAF_FILE_WATCH>
     PRIVATE
     $<$<BOOL:${WIN32}>:WIN32>
     $<$<BOOL:${LINUX}>:LINUX>
