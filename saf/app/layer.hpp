@@ -111,6 +111,12 @@ namespace saf
         virtual void onUIRender(Application* application) {}
 
 #ifdef SAF_SCRIPTING
+        int isSubstring(const saf::Str& s1, const saf::Str& s2)
+        {
+            if (s2.find(s1) != saf::Str::npos)
+                return s2.find(s1);
+            return -1;
+        }
 
         /**
          * @brief Loads a lua script from a file.
@@ -170,6 +176,10 @@ namespace saf
                 // watch for updates
                 auto dirName = efsw::FileSystem::getCurrentWorkingDirectory();
                 efsw::FileSystem::dirAddSlashAtEnd(dirName);
+                if (isSubstring(dirName, fileName) >= 0)
+                {
+                    dirName = "";
+                }
                 auto completeFilename = dirName + fileName;
 
                 dirName = efsw::FileSystem::pathRemoveFileName(completeFilename);
