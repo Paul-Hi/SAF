@@ -24,7 +24,7 @@ public:
             "./examples/scripts/test.lua", [this](sol::state& state)
             { state["mSeed"] = &mSeed; },
             [](sol::state&) {}, [](const Str& msg)
-            { std::cout << "[Script] " << msg << std::endl; });
+            { UILog::get().add("[Script] %s", msg.c_str()); });
 #endif
     }
 
@@ -74,6 +74,17 @@ public:
         ImGui::Spacing();
 
         mTest.onUIRender();
+
+        static const char* labels[] = { "-.-", ":D", ":)", ":(", "^^" };
+        static F32 data[]           = { 0.1, 0.4, 0.2, 0.1, 0.2 };
+
+        if (ImPlot::BeginPlot("##Pie2", ImVec2(350, 250), ImPlotFlags_Equal | ImPlotFlags_NoMouseText))
+        {
+            ImPlot::SetupAxes(nullptr, nullptr, ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
+            ImPlot::SetupAxesLimits(0, 1, 0, 1);
+            ImPlot::PlotPieChart(labels, data, 5, 0.65, 0.5, 0.3, "%.1f", 180);
+            ImPlot::EndPlot();
+        }
 
         ImGui::End();
 
