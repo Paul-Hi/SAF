@@ -18,6 +18,7 @@ target_link_libraries(saf
     Eigen3::Eigen
     imgui
     $<$<BOOL:${SAF_ENABLE_SCRIPTING}>:lua::lua>
+    $<$<BOOL:${SAF_ENABLE_FILE_WATCH}>:efsw::efsw>
     PRIVATE
     glfw
 )
@@ -25,7 +26,8 @@ target_link_libraries(saf
 target_include_directories(saf
     PUBLIC
     ${SAF_INCLUDE_DIR}
-    ${sol2_SOURCE_DIR}/include
+    $<$<BOOL:${SAF_ENABLE_SCRIPTING}>:${sol2_SOURCE_DIR}/include>
+    $<$<BOOL:${SAF_ENABLE_FILE_WATCH}>:${efsw_SOURCE_DIR}/include>
 )
 
 set(SAF_PRECOMPILED_HEADER

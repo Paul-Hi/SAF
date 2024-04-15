@@ -158,6 +158,7 @@ if(SAF_ENABLE_FILE_WATCH)
         GIT_SHALLOW ON
         GIT_PROGRESS ON
     )
+    set(VERBOSE OFF)
     FetchContent_MakeAvailable(efsw)
 endif()
 
@@ -205,6 +206,7 @@ if(SAF_ENABLE_SCRIPTING)
 endif()
 
 if(SAF_ENABLE_FILE_WATCH)
+    add_library(efsw::efsw ALIAS efsw)
     message(STATUS "Added efsw in: " ${efsw_SOURCE_DIR})
 endif()
 

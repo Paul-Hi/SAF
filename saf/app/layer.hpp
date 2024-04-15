@@ -18,6 +18,10 @@
 #define SOL_ALL_SAFETIES_ON 1
 #include <sol/sol.hpp>
 #endif
+#ifdef SAF_FILE_WATCH
+#include <efsw/FileSystem.hpp>
+#include <efsw/efsw.hpp>
+#endif
 
 struct GLFWwindow;
 struct ImGui_ImplVulkanH_Window;
@@ -52,6 +56,10 @@ namespace saf
         std::function<void(sol::state&)> cleanup;
         /** @brief A function used to log script output. */
         std::function<void(const Str&)> log;
+
+#ifdef SAF_FILE_WATCH
+        efsw::WatchID watchID;
+#endif
     };
 #endif
 
@@ -64,7 +72,15 @@ namespace saf
         /**
          * @brief Constructs a @a Layer.
          */
-        Layer() noexcept = default;
+        Layer() noexcept
+#ifdef SAF_FILE_WATCH
+            : mScriptUpdateListener(this)
+        {
+            mScriptWatcher.watch();
+        }
+#else
+            = default;
+#endif
 
         virtual ~Layer() = default;
 
@@ -95,6 +111,7 @@ namespace saf
         virtual void onUIRender(Application* application) {}
 
 #ifdef SAF_SCRIPTING
+
         /**
          * @brief Loads a lua script from a file.
          * @tparam SetupFn The type of @a setup.
@@ -149,6 +166,21 @@ namespace saf
                 script.onUpdate = sol::protected_function(script.state["onUpdate"], script.state["print"]);
                 script.onDetach = sol::protected_function(script.state["onDetach"], script.state["print"]);
 
+#ifdef SAF_FILE_WATCH
+                // watch for updates
+                auto dirName = efsw::FileSystem::getCurrentWorkingDirectory();
+                efsw::FileSystem::dirAddSlashAtEnd(dirName);
+                auto completeFilename = dirName + fileName;
+
+                dirName = efsw::FileSystem::pathRemoveFileName(completeFilename);
+
+                const auto& watchedDirs = mScriptWatcher.directories();
+                if (std::find(watchedDirs.begin(), watchedDirs.end(), dirName) == watchedDirs.end())
+                {
+                    script.watchID = checkWatchID(mScriptWatcher.addWatch(dirName, &mScriptUpdateListener, false));
+                }
+#endif
+
                 mScripts[scriptName] = std::move(script);
             }
             catch (const sol::error& e)
@@ -161,7 +193,8 @@ namespace saf
          * @brief Unload a lua script.
          * @param scriptName The name (ID) of the script.
          */
-        inline void unloadScript(const Str& scriptName)
+        inline void
+        unloadScript(const Str& scriptName)
         {
             auto it = mScripts.find(scriptName);
             if (it != mScripts.end())
@@ -226,6 +259,11 @@ namespace saf
 
             script.cleanup(script.state);
             script.state.collect_garbage();
+
+#ifdef SAF_FILE_WATCH
+            mScriptWatcher.removeWatch(script.watchID);
+#endif
+
             it = mScripts.erase(it);
         }
 
@@ -244,8 +282,6 @@ namespace saf
             script.state.collect_garbage();
             Script backup = std::move(script);
             it            = mScripts.erase(it);
-
-            std::cout << typeid(decltype(this)).name();
 
             loadScript(backup.scriptName, backup.fileName, backup.setup, backup.cleanup, backup.log);
         }
@@ -324,6 +360,92 @@ namespace saf
 
         /** @brief Map of loaded scripts, name to script data.*/
         std::map<Str, Script> mScripts;
+
+#ifdef SAF_FILE_WATCH
+        class ScriptUpdateListener : public efsw::FileWatchListener
+        {
+        public:
+            ScriptUpdateListener(Layer* layerPtr)
+                : mLayerPtr(layerPtr)
+            {
+            }
+
+            void handleFileAction(efsw::WatchID watchid, const std::string& dir, const std::string& filename, efsw::Action action, std::string oldFilename) override
+            {
+                mLayerPtr->scriptUpdateCallback(watchid, dir, filename, action, oldFilename);
+            }
+
+        private:
+            Layer* mLayerPtr;
+        };
+
+        inline efsw::WatchID checkWatchID(efsw::WatchID watchid)
+        {
+            switch (watchid)
+            {
+            case efsw::Errors::FileNotFound:
+            case efsw::Errors::FileRepeated:
+            case efsw::Errors::FileOutOfScope:
+            case efsw::Errors::FileRemote:
+            case efsw::Errors::WatcherFailed:
+            case efsw::Errors::Unspecified:
+            {
+                std::cerr << efsw::Errors::Log::getLastErrorLog().c_str() << std::endl;
+                break;
+            }
+            default:
+                break;
+            }
+
+            return watchid;
+        }
+
+        inline void scriptUpdateCallback(efsw::WatchID watchid, const std::string& dir, const std::string& filename, efsw::Action action, std::string oldFilename)
+        {
+            switch (action)
+            {
+            case efsw::Actions::Add:
+                // Ignore - we watch only the script file atm.
+                break;
+            case efsw::Actions::Delete:
+                // Remove Script
+                {
+                    auto it = std::find_if(mScripts.begin(), mScripts.end(),
+                                           [this, &filename](const auto& pair) -> bool
+                                           {
+                                               return efsw::FileSystem::fileNameFromPath(pair.second.fileName) == filename;
+                                           });
+                    if (it != mScripts.end())
+                    {
+                        unloadScript(it);
+                    }
+                }
+                break;
+            case efsw::Actions::Modified:
+                // Reload Script
+                {
+                    auto it = std::find_if(mScripts.begin(), mScripts.end(),
+                                           [this, &filename](const auto& pair) -> bool
+                                           {
+                                               return efsw::FileSystem::fileNameFromPath(pair.second.fileName) == filename;
+                                           });
+                    if (it != mScripts.end())
+                    {
+                        reloadScript(it);
+                    }
+                }
+                break;
+            case efsw::Actions::Moved:
+                // Ignore - we watch only the script file atm.
+                break;
+            default:
+                break;
+            }
+        }
+
+        efsw::FileWatcher mScriptWatcher;
+        ScriptUpdateListener mScriptUpdateListener;
+#endif
 #endif
     };
 } // namespace saf
