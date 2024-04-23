@@ -1,6 +1,5 @@
 
 #include <app/parameter.hpp>
-#include <core/types.hpp>
 
 namespace saf
 {

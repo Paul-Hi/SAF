@@ -5,19 +5,17 @@ set(APP_NAME demo)
 message(STATUS "================================================")
 message(STATUS "Adding demo!")
 
-file(GLOB_RECURSE HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp)
-file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+file(GLOB_RECURSE HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp ${CMAKE_CURRENT_SOURCE_DIR}/*.cuh)
+file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/*.cu)
 
 if(WIN32 AND MSVC)
     add_executable(
         ${APP_NAME} WIN32
-        ${HEADERS}
         ${SOURCES}
     )
 else()
     add_executable(
         ${APP_NAME}
-        ${HEADERS}
         ${SOURCES}
     )
 endif()
@@ -37,6 +35,20 @@ target_link_libraries(${APP_NAME}
 target_include_directories(${APP_NAME}
     PRIVATE
     ${SAF_INCLUDE_DIR}
+)
+
+if(SAF_ENABLE_CUDA_INTEROP)
+    set_target_properties(${APP_NAME}
+        PROPERTIES
+        CUDA_SEPARABLE_COMPILATION ON
+    )
+endif()
+
+target_compile_options(${APP_NAME}
+    PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>: /W4>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>: -Wall -Wextra -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-gnu-zero-variadic-macro-arguments -Wno-global-constructors -Wno-documentation-unknown-command>
+    $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v -Xcompiler=-fopenmp>
 )
 
 target_compile_definitions(${APP_NAME}
