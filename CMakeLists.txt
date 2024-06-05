@@ -154,7 +154,7 @@ if(SAF_ENABLE_FILE_WATCH)
     # ----- efsw -----
     FetchContent_Declare(efsw
         GIT_REPOSITORY https://github.com/SpartanJ/efsw
-        GIT_TAG 341934765471e4074e90bb5205ff4a65c16499c6
+        GIT_TAG 1.4.0
         GIT_SHALLOW ON
         GIT_PROGRESS ON
     )
