@@ -68,12 +68,12 @@ include(FetchContent)
 set(FETCHCONTENT_QUIET TRUE)
 set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE ALWAYS)
 
+# Vulkan
+find_package(Vulkan REQUIRED)
+
 cmake_language(GET_MESSAGE_LOG_LEVEL CMAKE_MESSAGE_LOG_LEVEL_BACKUP)
 set(CMAKE_MESSAGE_LOG_LEVEL ERROR)
 set(FETCHCONTENT_QUIET ON)
-
-# Vulkan
-find_package(Vulkan REQUIRED)
 
 # imgui
 FetchContent_Declare(
