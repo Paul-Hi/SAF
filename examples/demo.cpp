@@ -21,11 +21,16 @@ public:
 #ifdef SAF_SCRIPTING
         loadScript(
             "TestScript",
-            "./examples/scripts/test.lua", [this](sol::state& state)
-            { state["mSeed"] = &mSeed; },
+            Application::stringToPath("./examples/scripts/test.lua"), [this](sol::state& state)
+            { state.open_libraries(sol::lib::math); state["seed"] = &mSeed; state["update"] = [this] { this->updateLayer(); }; },
             [](sol::state&) {}, [](const Str& msg)
             { UILog::get().add("[Script] %s", msg.c_str()); });
 #endif
+    }
+
+    inline void updateLayer()
+    {
+        mUpdate = true;
     }
 
     virtual void onDetach() override
@@ -63,7 +68,7 @@ public:
         ImGui::Text("Average %.3f ms/frame", 1000.0 / fr);
         ImGui::Spacing();
         ImGui::Image(mImage->getDescriptorSet(), ImVec2(static_cast<F32>(mImage->getWidth()), static_cast<F32>(mImage->getHeight())));
-        mUpdate = mSeed.onUIRender();
+        mUpdate |= mSeed.onUIRender();
 
         mRandom.onUIRender();
 

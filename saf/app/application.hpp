@@ -114,6 +114,24 @@ namespace saf
             mMenubarCallback = callback;
         }
 
+#ifdef SAF_FILE_WATCH
+
+        /**
+         * @brief Change all string slashes to the operating system slash.
+         * @details This function changes all slashes in a string to the operating system slash, since the file system watcher uses the operating system slash.
+         * @param str The string to change.
+         * @return std::string The string with the correct slashes.
+         */
+        static inline std::string stringToPath(const std::string& str)
+        {
+            std::string path = str;
+            std::replace(path.begin(), path.end(), '\\', efsw::FileSystem::getOSSlash());
+            std::replace(path.begin(), path.end(), '/', efsw::FileSystem::getOSSlash());
+            return path;
+        }
+
+#endif
+
 #ifdef SAF_SCRIPTING
         /**
          * @brief Renders information about all active lua scripts.

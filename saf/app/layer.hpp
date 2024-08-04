@@ -163,9 +163,17 @@ namespace saf
                 script.setup   = setup;
                 script.cleanup = cleanup;
 
-                script.state["print"] = [log](sol::object v)
+                auto tostring = sol::protected_function(script.state["tostring"]);
+
+                script.state["print"] = [tostring, log](sol::variadic_args args)
                 {
-                    log(v.as<std::string>());
+                    std::stringstream ss;
+                    for (auto arg : args)
+                    {
+                        ss << tostring(arg.as<sol::object>()).get<std::string>() << "\t";
+                    }
+
+                    log(ss.str());
                 };
 
                 script.onAttach = sol::protected_function(script.state["onAttach"], script.state["print"]);

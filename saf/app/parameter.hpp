@@ -940,11 +940,11 @@ namespace saf
 
         bool onUIRender() override
         {
-            bool changed = ImGui::InputText(mName.c_str(), mBuf.begin().base(), mBuf.size());
+            bool changed = ImGui::InputText(mName.c_str(), mBuf.data(), mBuf.size());
 
             if (changed)
             {
-                mValue = Str(mBuf.begin().base(), mBuf.size());
+                mValue = Str(mBuf.data(), mBuf.size());
             }
 
             return changed;

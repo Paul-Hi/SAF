@@ -19,9 +19,11 @@ function onAttach()
 end
 
 function onUpdate()
-    print("onUpdate")
+    -- print("onUpdate")
     i = i + 1
-    return i < 2
+    seed:set((UVec2:new(math.random(0, 255), math.random(0, 255))))
+    update()
+    return i < 32
 end
 
 function onDetach()
