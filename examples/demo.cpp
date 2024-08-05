@@ -18,13 +18,13 @@ public:
         mData.resize(720 * 720, Eigen::Vector4<Byte>(255, 0, 0, 255));
         mImage = std::make_shared<Image>(application->getPhysicalDevice(), application->getDevice(), application->getQueue(), application->getCommandPool(), application->getCommandBuffer(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
         mRandom.set(RandGen(mSeed));
-#ifdef SAF_SCRIPTING
+#if defined(SAF_SCRIPTING) && defined(SAF_FILE_WATCH)
         loadScript(
             "TestScript",
             Application::stringToPath("./examples/scripts/test.lua"), [this](sol::state& state)
             { state.open_libraries(sol::lib::math); state["seed"] = &mSeed; state["update"] = [this] { this->updateLayer(); }; },
             [](sol::state&) {}, [](const Str& msg)
-            { UILog::get().add("[Script] %s", msg.c_str()); });
+            { UILog::get().println("[Script] %s", msg.c_str()); });
 #endif
     }
 

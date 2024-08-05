@@ -49,7 +49,27 @@ namespace saf
          * @brief Writes formated message to the log.
          * @param[in] fmt The formatted message
          */
-        void add(const char* fmt, ...) IM_FMTARGS(2)
+        void print(const char* fmt, ...) IM_FMTARGS(2)
+        {
+            int oldSize = mBuffer.size();
+            va_list args;
+            va_start(args, fmt);
+            mBuffer.appendfv(fmt, args);
+            va_end(args);
+            for (int newSize = mBuffer.size(); oldSize < newSize; oldSize++)
+            {
+                if (mBuffer[oldSize] == '\n')
+                {
+                    mLineOffsets.push_back(oldSize + 1);
+                }
+            }
+        }
+
+        /**
+         * @brief Writes formated message to the log. Adds a newline at the end.
+         * @param[in] fmt The formatted message
+         */
+        void println(const char* fmt, ...) IM_FMTARGS(2)
         {
             int oldSize = mBuffer.size();
             va_list args;
