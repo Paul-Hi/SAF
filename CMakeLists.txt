@@ -79,7 +79,7 @@ set(FETCHCONTENT_QUIET ON)
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui
-    GIT_TAG v1.90.4-docking
+    GIT_TAG v1.91.8-docking
     GIT_SHALLOW ON
     GIT_PROGRESS ON
 )
@@ -88,7 +88,16 @@ FetchContent_Declare(
 FetchContent_Declare(
     implot
     GIT_REPOSITORY https://github.com/epezent/implot
-    GIT_TAG v0.16
+    GIT_TAG 47522f47054d33178e7defa780042bd2a06b09f9
+    GIT_SHALLOW ON
+    GIT_PROGRESS ON
+)
+
+# implot3d
+FetchContent_Declare(
+    implot3d
+    GIT_REPOSITORY https://github.com/brenocq/implot3d.git
+    GIT_TAG 69ee9218bec6b4e53cd87233ff908397f4bb8b47
     GIT_SHALLOW ON
     GIT_PROGRESS ON
 )
@@ -115,12 +124,12 @@ FetchContent_Declare(eigen
 FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw
-    GIT_TAG 3.3.8
+    GIT_TAG 3.4
     GIT_SHALLOW ON
     GIT_PROGRESS ON
 )
 
-FetchContent_MakeAvailable(imgui implot eigen glfw)
+FetchContent_MakeAvailable(imgui implot implot3d eigen glfw)
 FetchContent_Populate(imfile)
 
 # pybind11
@@ -140,7 +149,7 @@ if(SAF_ENABLE_SCRIPTING)
     # ----- Lua -----
     FetchContent_Declare(lua
         GIT_REPOSITORY https://github.com/lua/lua.git
-        GIT_TAG v5.4.6
+        GIT_TAG v5.4.7
         GIT_SHALLOW ON
         GIT_PROGRESS ON
     )
@@ -164,7 +173,7 @@ if(SAF_ENABLE_FILE_WATCH)
     # ----- efsw -----
     FetchContent_Declare(efsw
         GIT_REPOSITORY https://github.com/SpartanJ/efsw
-        GIT_TAG 1.4.0
+        GIT_TAG 1.4.1
         GIT_SHALLOW ON
         GIT_PROGRESS ON
     )
@@ -187,20 +196,24 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
-
     ${implot_SOURCE_DIR}/implot.cpp
     ${implot_SOURCE_DIR}/implot_demo.cpp
     ${implot_SOURCE_DIR}/implot_items.cpp
+    ${implot3d_SOURCE_DIR}/implot3d.cpp
+    ${implot3d_SOURCE_DIR}/implot3d_demo.cpp
+    ${implot3d_SOURCE_DIR}/implot3d_items.cpp
+    ${implot3d_SOURCE_DIR}/implot3d_meshes.cpp
 
     ${imfile_SOURCE_DIR}/ImGuiFileDialog.cpp
 )
-target_include_directories(imgui PUBLIC . ${glfw_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS} ${imgui_SOURCE_DIR} ${implot_SOURCE_DIR} ${imfile_SOURCE_DIR})
+target_include_directories(imgui PUBLIC . ${glfw_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS} ${imgui_SOURCE_DIR} ${implot_SOURCE_DIR} ${implot3d_SOURCE_DIR} ${imfile_SOURCE_DIR})
 target_link_directories(imgui PRIVATE ${CMAKE_BINARY_DIR})
 target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
 
 set(CMAKE_MESSAGE_LOG_LEVEL ${CMAKE_MESSAGE_LOG_LEVEL_BACKUP})
 message(STATUS "Added dear imgui in: " ${imgui_SOURCE_DIR})
 message(STATUS "Added implot in: " ${implot_SOURCE_DIR})
+message(STATUS "Added implot3d in: " ${implot3d_SOURCE_DIR})
 
 unset(BUILD_TESTING CACHE)
 message(STATUS "Added Eigen in: " ${eigen_SOURCE_DIR})
