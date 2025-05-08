@@ -455,8 +455,8 @@ static void frameRender(VulkanContext* context, ImDrawData* drawData)
     {
 
         VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        VkSubmitInfo info               = {};
-        info.sType                      = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        VkSubmitInfo info              = {};
+        info.sType                     = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 #ifdef SAF_CUDA_INTEROP
         info.waitSemaphoreCount   = 1 + (!firstFrame ? imageSemaphores.size() : 0);
         info.signalSemaphoreCount = 1 + imageSemaphores.size();
@@ -691,14 +691,16 @@ void Application::run()
     {
         I32 width, height;
         glfwGetFramebufferSize(mWindow, &width, &height);
-        if (width > 0 && height > 0 && (gSwapChainRebuild || gVulkanContext.width != width || gVulkanContext.height != height))
+        if (width > 0 && height > 0 && (gSwapChainRebuild || mVulkanContext->width != width || mVulkanContext->height != height))
         {
             if (width > 0 && height > 0)
             {
                 vkSetMinImageCount(static_cast<U32>(gMinImageCount));
-                vkCreateOrResizeContext(gInstance, gPhysicalDevice, gDevice, &gVulkanContext, gQueueFamily, gAllocator, width, height, static_cast<U32>(gMinImageCount));
-                gVulkanContext.frameIndex = 0;
-                gSwapChainRebuild         = false;
+                vkCreateOrResizeContext(gInstance, gPhysicalDevice, gDevice, mVulkanContext, gQueueFamily, gAllocator, width, height, static_cast<U32>(gMinImageCount));
+                mVulkanContext->frameIndex             = 0;
+                mApplicationContext->mCommandPoolRef   = mVulkanContext->ressourceCommandPool;
+                mApplicationContext->mCommandBufferRef = mVulkanContext->ressourceCommandBuffer;
+                gSwapChainRebuild                      = false;
             }
         }
         if (glfwGetWindowAttrib(mWindow, GLFW_ICONIFIED) != 0)

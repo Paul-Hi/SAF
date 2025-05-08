@@ -228,14 +228,14 @@ void Image::update(U32 width, U32 height, VkFormat format, const void* data)
         checkVkResult(err);
         VkMemoryRequirements bufferRequirements;
         vkGetBufferMemoryRequirements(mApplicationContext->mDeviceRef, mStagingBuffer, &bufferRequirements);
-        VkMemoryAllocateInfo alloc_info{};
-        alloc_info.sType          = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        alloc_info.allocationSize = bufferRequirements.size;
-        mAlignedSize              = bufferRequirements.size;
+        VkMemoryAllocateInfo allocInfo{};
+        allocInfo.sType          = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = bufferRequirements.size;
+        mAlignedSize             = bufferRequirements.size;
         VkPhysicalDeviceMemoryProperties memoryProperties;
         vkGetPhysicalDeviceMemoryProperties(mApplicationContext->mPhysicalDeviceRef, &memoryProperties);
-        alloc_info.memoryTypeIndex = findMemoryType(bufferRequirements.memoryTypeBits, memoryProperties, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-        err                        = vkAllocateMemory(mApplicationContext->mDeviceRef, &alloc_info, nullptr, &mStagingBufferMemory);
+        allocInfo.memoryTypeIndex = findMemoryType(bufferRequirements.memoryTypeBits, memoryProperties, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+        err                       = vkAllocateMemory(mApplicationContext->mDeviceRef, &allocInfo, nullptr, &mStagingBufferMemory);
         checkVkResult(err);
         err = vkBindBufferMemory(mApplicationContext->mDeviceRef, mStagingBuffer, mStagingBufferMemory, 0);
         checkVkResult(err);
@@ -277,6 +277,120 @@ void Image::update(U32 width, U32 height, VkFormat format, const void* data)
     }
 
     fillFromStagingBuffer(mApplicationContext->mDeviceRef, mApplicationContext->mQueueRef, mApplicationContext->mCommandPoolRef, mApplicationContext->mCommandBufferRef, mStagingBuffer, VkExtent3D{ mWidth, mHeight, 1 });
+}
+
+std::vector<Byte> Image::downloadImageData() const
+{
+    VkDeviceSize imageSize = mWidth * mHeight * bytesPerPixel(mFormat);
+
+    std::vector<Byte> imageData(imageSize);
+
+    VkImageCreateInfo imageCreateInfo{};
+    imageCreateInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageCreateInfo.imageType     = VK_IMAGE_TYPE_2D;
+    imageCreateInfo.extent        = { mWidth, mHeight, 1 };
+    imageCreateInfo.mipLevels     = 1;
+    imageCreateInfo.arrayLayers   = 1;
+    imageCreateInfo.format        = mFormat;
+    imageCreateInfo.tiling        = VK_IMAGE_TILING_LINEAR;
+    imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageCreateInfo.usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    imageCreateInfo.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    imageCreateInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
+    imageCreateInfo.flags         = 0;
+
+    VkImage dstImage;
+    VkResult err = vkCreateImage(mApplicationContext->mDeviceRef, &imageCreateInfo, nullptr, &dstImage);
+    checkVkResult(err);
+
+    VkMemoryRequirements requirements;
+    vkGetImageMemoryRequirements(mApplicationContext->mDeviceRef, dstImage, &requirements);
+    VkPhysicalDeviceMemoryProperties memoryProperties;
+    vkGetPhysicalDeviceMemoryProperties(mApplicationContext->mPhysicalDeviceRef, &memoryProperties);
+
+    VkMemoryAllocateInfo memAllocInfo{};
+    memAllocInfo.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    memAllocInfo.allocationSize  = requirements.size;
+    memAllocInfo.memoryTypeIndex = findMemoryType(requirements.memoryTypeBits, memoryProperties, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    VkDeviceMemory dstImageMemory;
+    err = vkAllocateMemory(mApplicationContext->mDeviceRef, &memAllocInfo, nullptr, &dstImageMemory);
+    checkVkResult(err);
+
+    err = vkBindImageMemory(mApplicationContext->mDeviceRef, dstImage, dstImageMemory, 0);
+    checkVkResult(err);
+
+    ImmediateSubmit::execute(
+        mApplicationContext->mDeviceRef, mApplicationContext->mQueueRef, mApplicationContext->mCommandPoolRef, mApplicationContext->mCommandBufferRef, [&](VkCommandBuffer commandBuffer)
+        {
+            VkImageMemoryBarrier barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.image = dstImage;
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.layerCount = 1;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
+
+            barrier.image = mImage;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
+
+            VkImageCopy copyRegion{};
+            copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copyRegion.srcSubresource.layerCount = 1;
+            copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copyRegion.dstSubresource.layerCount = 1;
+            copyRegion.extent = { mWidth, mHeight, 1 };
+            copyRegion.srcSubresource.mipLevel = 0;
+            copyRegion.srcSubresource.baseArrayLayer = 0;
+            copyRegion.dstSubresource.mipLevel = 0;
+            copyRegion.dstSubresource.baseArrayLayer = 0;
+
+            vkCmdCopyImage(commandBuffer, mImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+
+            barrier.image = dstImage;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+
+            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, NULL, 0, NULL, 1, &barrier);
+
+            barrier.image = mImage;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, NULL, 0, NULL, 1, &barrier); });
+
+    VkImageSubresource subResource{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
+    VkSubresourceLayout subResourceLayout;
+    vkGetImageSubresourceLayout(mApplicationContext->mDeviceRef, dstImage, &subResource, &subResourceLayout);
+
+    const char* mappedData;
+    err = vkMapMemory(mApplicationContext->mDeviceRef, dstImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&mappedData);
+    checkVkResult(err);
+
+    mappedData += subResourceLayout.offset;
+    memcpy(imageData.data(), mappedData, imageData.size());
+
+    vkUnmapMemory(mApplicationContext->mDeviceRef, dstImageMemory);
+    vkFreeMemory(mApplicationContext->mDeviceRef, dstImageMemory, nullptr);
+    vkDestroyImage(mApplicationContext->mDeviceRef, dstImage, nullptr);
+
+    return imageData;
 }
 
 void Image::allocateMemory(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VkQueue queue, VkCommandPool commandPool, VkCommandBuffer commandBuffer)

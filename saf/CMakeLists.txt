@@ -21,7 +21,6 @@ target_link_libraries(saf
     $<$<BOOL:${SAF_ENABLE_SCRIPTING}>:lua::lua>
     $<$<BOOL:${SAF_ENABLE_FILE_WATCH}>:efsw::efsw>
     $<$<BOOL:${SAF_ENABLE_CUDA_INTEROP}>:${CUDA_LIBRARIES}>
-    $<$<BOOL:${SAF_ENABLE_CUDA_INTEROP}>:Thrust>
     PRIVATE
     glfw
 )

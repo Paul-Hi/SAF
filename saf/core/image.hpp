@@ -52,6 +52,8 @@ namespace saf
             return mHeight;
         }
 
+        std::vector<Byte> downloadImageData() const;
+
 #ifdef SAF_CUDA_INTEROP
         cudaSurfaceObject_t getCudaSurfaceObject() const { return mCudaSurfaceObject; }
         cudaTextureObject_t getCudaTextureObject() const { return mCudaTextureObject; }
