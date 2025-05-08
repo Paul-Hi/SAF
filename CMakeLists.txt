@@ -24,6 +24,7 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 option(SAF_BUILD_DOC "Build Documentation" OFF)
 option(SAF_ENABLE_SCRIPTING "Enable Lua Scripting" OFF)
 option(SAF_ENABLE_FILE_WATCH "Enable File Watching" OFF)
+option(SAF_ENABLE_CUDA_INTEROP "Enable Easy Interoperability with CUDA" OFF)
 
 set(VERSION_MAJOR 0 CACHE STRING "Project major version number.")
 set(VERSION_MINOR 0 CACHE STRING "Project minor version number.")
@@ -70,6 +71,13 @@ set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE ALWAYS)
 
 # Vulkan
 find_package(Vulkan REQUIRED)
+
+if(SAF_ENABLE_CUDA_INTEROP)
+    # CUDA and Thrust
+    enable_language(CUDA)
+    find_package(Thrust REQUIRED CONFIG)
+    thrust_create_target(Thrust)
+endif()
 
 cmake_language(GET_MESSAGE_LOG_LEVEL CMAKE_MESSAGE_LOG_LEVEL_BACKUP)
 set(CMAKE_MESSAGE_LOG_LEVEL ERROR)

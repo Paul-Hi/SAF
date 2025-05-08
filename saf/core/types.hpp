@@ -23,9 +23,8 @@
 #pragma warning(push, 0)
 #define NOMINMAX
 #define GLFW_INCLUDE_NONE
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
+#include <GLFW/glfw3.h>
 #pragma warning(pop)
 /** @endcond */
 
@@ -35,6 +34,47 @@ namespace saf
 #ifndef SAF_ASSERT
 #include <cassert>
 #define SAF_ASSERT(expr) assert(expr)
+#endif
+
+#ifdef SAF_CUDA_INTEROP
+
+#ifdef __CUDA_ARCH__
+
+/** @brief Wrapper for __CUDA_ARCH__. */
+#define CUDA_COMPILE_PHASE
+
+/** @brief Function to use from kernels and host functions. */
+#define CUDA_HOST_DEVICE __host__ __device__
+/** @brief Host function. */
+#define CUDA_HOST __host__
+/** @brief Device function. */
+#define CUDA_DEVICE __device__
+/** @brief Kernel function. */
+#define CUDA_GLOBAL_KERNEL __global__
+
+#else
+
+/** @brief Function to use from kernels and host functions. */
+#define CUDA_HOST_DEVICE
+/** @brief Host function. */
+#define CUDA_HOST
+/** @brief Device function. */
+#define CUDA_DEVICE
+/** @brief Kernel function. */
+#define CUDA_GLOBAL_KERNEL __global__
+
+#endif
+
+#define CUDA_CHECK(call)                                                                                                                                    \
+    {                                                                                                                                                       \
+        cudaError_t _result = call;                                                                                                                         \
+        if (cudaSuccess != _result)                                                                                                                         \
+        {                                                                                                                                                   \
+            std::cerr << "[CUDA] Error " << _result << " in " << __FILE__ << " " << __LINE__ << " " << cudaGetErrorString(_result) << " " << #call << "\n"; \
+            exit(0);                                                                                                                                        \
+        }                                                                                                                                                   \
+    }
+
 #endif
 
     /** @brief Typedef for one byte. */

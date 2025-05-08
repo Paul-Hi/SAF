@@ -14,6 +14,11 @@
 #include "layer.hpp"
 #include <vector>
 
+#ifdef SAF_CUDA_INTEROP
+#include <cuda.h>
+#include <cuda_runtime.h>
+#endif
+
 struct GLFWwindow;
 
 namespace saf
@@ -33,6 +38,63 @@ namespace saf
         F32 fontSize = 18.0f;
         /** @brief The clear color of the @a Application window. */
         Vec4 clearColor;
+    };
+
+    class ApplicationContext
+    {
+    public:
+        ApplicationContext() = default;
+
+        ~ApplicationContext() = default;
+
+#ifdef SAF_CUDA_INTEROP
+        struct ImageSemaphores
+        {
+            VkSemaphore vkUpdateCudaSemaphore;
+            VkSemaphore cudaUpdateVkSemaphore;
+
+            cudaExternalSemaphore_t cudaExternalVkUpdateCudaSemaphore;
+            cudaExternalSemaphore_t cudaExternalCudaUpdateVkSemaphore;
+        };
+#endif
+    private:
+        friend class Application;
+        friend class Image;
+
+        VkInstance mInstanceRef;
+        VkPhysicalDevice mPhysicalDeviceRef;
+        VkDevice mDeviceRef;
+
+        VkQueue mQueueRef;
+        VkCommandPool mCommandPoolRef;
+        VkCommandBuffer mCommandBufferRef;
+
+#ifdef SAF_CUDA_INTEROP
+        struct ContextSemaphores
+        {
+            std::unordered_map<VkImage, ImageSemaphores> imageSemaphores;
+        } mContextSemaphores;
+
+        void registerImage(VkImage image);
+        void registerImage(VkImage image, const ImageSemaphores& imageSemaphores);
+        void deregisterImage(VkImage image);
+
+#ifdef WIN32
+        inline void getMemoryWin32HandleKHR(const VkMemoryGetWin32HandleInfoKHR* pGetWin32HandleInfo, HANDLE* pHandle)
+        {
+            auto ptrGetMemoryWin32HandleKHR = reinterpret_cast<PFN_vkGetMemoryWin32HandleKHR>(vkGetInstanceProcAddr(mInstanceRef, "vkGetMemoryWin32HandleKHR"));
+            SAF_ASSERT(ptrGetMemoryWin32HandleKHR != nullptr);
+            ptrGetMemoryWin32HandleKHR(mDeviceRef, pGetWin32HandleInfo, pHandle);
+        }
+#else
+        inline void getMemoryFdKHR(const VkMemoryGetFdInfoKHR* pGetFdInfo, int* pFd)
+        {
+            auto ptrGetMemoryFdKHR = reinterpret_cast<PFN_vkGetMemoryFdKHR>(vkGetInstanceProcAddr(mInstanceRef, "vkGetMemoryFdKHR"));
+            SAF_ASSERT(ptrGetMemoryFdKHR != nullptr);
+            ptrGetMemoryFdKHR(mDeviceRef, pGetFdInfo, pFd);
+        }
+#endif
+#endif
     };
 
     /**
@@ -59,35 +121,10 @@ namespace saf
          */
         void close();
 
-        /**
-         * @brief Retrieves the @a VkPhysicalDevice of the @a Application.
-         * @return The @a VkPhysicalDevice of the @a Application.
-         */
-        VkPhysicalDevice getPhysicalDevice();
-
-        /**
-         * @brief Retrieves the @a VkDevice of the @a Application.
-         * @return The @a VkDevice of the @a Application.
-         */
-        VkDevice getDevice();
-
-        /**
-         * @brief Retrieves the @a VkQueue of the @a Application.
-         * @return The @a VkQueue of the @a Application.
-         */
-        VkQueue getQueue();
-
-        /**
-         * @brief Retrieves the @a VkCommandPool of the @a Application.
-         * @return The @a VkCommandPool of the @a Application.
-         */
-        VkCommandPool getCommandPool();
-
-        /**
-         * @brief Retrieves the @a VkCommandBuffer of the @a Application.
-         * @return The @a VkCommandBuffer of the @a Application.
-         */
-        VkCommandBuffer getCommandBuffer();
+        inline std::shared_ptr<ApplicationContext> getApplicationContext() const
+        {
+            return mApplicationContext;
+        }
 
         /**
          * @brief Pushes a @a Layer to the layer stack hold by the @a Application.
@@ -173,6 +210,8 @@ namespace saf
 
         /** @brief The @a Applications layer stack. */
         std::vector<std::unique_ptr<Layer>> mLayerStack;
+
+        std::shared_ptr<ApplicationContext> mApplicationContext;
     };
 } // namespace saf
 

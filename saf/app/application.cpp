@@ -7,12 +7,18 @@
  */
 
 #include "application.hpp"
+#include <core/image.hpp>
 #include <core/immediateSubmit.hpp>
 #include <core/vulkanHelper.hpp>
 #include <implot.h>
 #include <implot3d.h>
 #include <ui/guiStyle.hpp>
 #include <ui/imguiBackend.hpp>
+
+#ifdef SAF_CUDA_INTEROP
+#include <cuda.h>
+#include <cuda_runtime.h>
+#endif
 
 using namespace saf;
 
@@ -87,6 +93,89 @@ static bool isExtensionAvailable(const ImVector<VkExtensionProperties>& properti
     return false;
 }
 
+#ifdef SAF_CUDA_INTEROP
+static void setupVulkanCudaInteropDevice(Byte* vkDeviceUUID)
+{
+    I32 deviceCount = 0;
+
+    cudaDeviceProp deviceProp;
+    CUDA_CHECK(cudaGetDeviceCount(&deviceCount));
+
+    if (deviceCount == 0)
+    {
+        std::cerr << "[CUDA] Error : No devices supporting CUDA.\n";
+    }
+
+    I32 currentCuDevice   = 0;
+    I32 devicesProhibited = 0;
+
+    while (currentCuDevice < deviceCount)
+    {
+        cudaGetDeviceProperties(&deviceProp, currentCuDevice);
+
+        if ((deviceProp.computeMode != cudaComputeModeProhibited))
+        {
+            int ret = std::memcmp(&deviceProp.uuid, &vkDeviceUUID, VK_UUID_SIZE);
+            if (ret == 0)
+            {
+                CUDA_CHECK(cudaSetDevice(currentCuDevice));
+                CUDA_CHECK(cudaGetDeviceProperties(&deviceProp, currentCuDevice));
+                // std::cout << "Using GPU Device " << currentCuDevice << " " << deviceProp.name << " with capability " << deviceProp.major << "." << deviceProp.minor << '\n';
+            }
+        }
+        else
+        {
+            devicesProhibited++;
+        }
+
+        currentCuDevice++;
+    }
+
+    if (devicesProhibited == deviceCount)
+    {
+        std::cerr << "[CUDA] Error : No Vulkan-CUDA Interop capable GPU found.\n";
+    }
+}
+#endif
+
+static VkPhysicalDevice selectPhysicalDevice()
+{
+    U32 gpuCount;
+    VkResult err = vkEnumeratePhysicalDevices(gInstance, &gpuCount, nullptr);
+    checkVkResult(err);
+    SAF_ASSERT(gpuCount > 0);
+
+    ImVector<VkPhysicalDevice> gpus;
+    gpus.resize(static_cast<I32>(gpuCount));
+    err = vkEnumeratePhysicalDevices(gInstance, &gpuCount, gpus.Data);
+    checkVkResult(err);
+
+    for (VkPhysicalDevice& device : gpus)
+    {
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(device, &properties);
+        if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+        {
+#ifdef SAF_CUDA_INTEROP
+            VkPhysicalDeviceIDProperties idProperties{};
+            idProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+            idProperties.pNext = NULL;
+            VkPhysicalDeviceProperties2 properties2{};
+            properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+            properties2.pNext = &idProperties;
+            vkGetPhysicalDeviceProperties2(device, &properties2);
+            setupVulkanCudaInteropDevice(&(idProperties.deviceUUID[0]));
+#endif
+            return device;
+        }
+    }
+
+    // Use first GPU (Integrated) is a Discrete one is not available. -> CUDA interop obviously not available.
+    if (gpuCount > 0)
+        return gpus[0];
+    return VK_NULL_HANDLE;
+}
+
 static void setupVulkan(ImVector<const char*> instanceExtensions)
 {
     VkResult err;
@@ -104,12 +193,29 @@ static void setupVulkan(ImVector<const char*> instanceExtensions)
         checkVkResult(err);
 
         if (isExtensionAvailable(properties, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME))
+        {
             instanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+        }
 #ifdef VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME
         if (isExtensionAvailable(properties, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME))
         {
             instanceExtensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
             createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+        }
+#endif
+        // Extension for CUDA Interop
+#ifdef SAF_CUDA_INTEROP
+        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME))
+        {
+            instanceExtensions.push_back(VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME);
+        }
+        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME))
+        {
+            instanceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
+        }
+        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME))
+        {
+            instanceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
         }
 #endif
 
@@ -129,7 +235,7 @@ static void setupVulkan(ImVector<const char*> instanceExtensions)
 
         // Setup the debug messenger
 #ifdef VULKAN_DEBUG_MESSENGER
-        auto vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(gInstance, "vkCreateDebugUtilsMessengerEXT");
+        auto vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(gInstance, "vkCreateDebugUtilsMessengerEXT"));
         SAF_ASSERT(vkCreateDebugUtilsMessengerEXT != nullptr);
         err = vkCreateDebugUtilsMessengerEXT(gInstance, &gDebugUtilsCreateInfo, gAllocator, &gDebugMessenger);
         checkVkResult(err);
@@ -155,7 +261,43 @@ static void setupVulkan(ImVector<const char*> instanceExtensions)
         vkEnumerateDeviceExtensionProperties(gPhysicalDevice, nullptr, &propertiesCount, properties.Data);
 #ifdef VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
         if (isExtensionAvailable(properties, VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME))
+        {
             deviceExtensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+        }
+#endif
+#ifdef SAF_CUDA_INTEROP
+        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME))
+        {
+            deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+        }
+        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME))
+        {
+            deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME);
+        }
+        if (isExtensionAvailable(properties, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME))
+        {
+            deviceExtensions.push_back(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+        }
+#ifdef _WIN64
+        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME))
+        {
+            deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
+        }
+        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME))
+        {
+            deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME);
+        }
+#else
+
+        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME))
+        {
+            deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
+        }
+        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME))
+        {
+            deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME);
+        }
+#endif
 #endif
 
         const F32 queuePriority[]            = { 1.0f };
@@ -238,7 +380,7 @@ static void cleanupVulkan()
 
 #ifdef VULKAN_DEBUG_MESSENGER
     // Remove the debug report callback
-    auto vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(gInstance, "vkDestroyDebugUtilsMessengerEXT");
+    auto vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(gInstance, "vkDestroyDebugUtilsMessengerEXT"));
     SAF_ASSERT(vkDestroyDebugUtilsMessengerEXT != nullptr);
     vkDestroyDebugUtilsMessengerEXT(gInstance, gDebugMessenger, gAllocator);
 #endif // VULKAN_DEBUG_MESSENGER
@@ -252,7 +394,11 @@ static void cleanupVulkanWindow()
     vkDestroyContext(gInstance, gDevice, &gVulkanContext, gAllocator);
 }
 
-static void frameRender(VulkanContext* context, ImDrawData* drawData)
+#ifdef SAF_CUDA_INTEROP
+static void frameRender(VulkanContext* context, ImDrawData* draw_data, bool firstFrame, const std::unordered_map<VkImage, ApplicationContext::ImageSemaphores>& imageSemaphores)
+#else
+static void frameRender(VulkanContext* context, ImDrawData* draw_data)
+#endif
 {
     VkResult err;
 
@@ -307,16 +453,41 @@ static void frameRender(VulkanContext* context, ImDrawData* drawData)
     // Submit command buffer
     vkCmdEndRenderPass(fd->commandBuffer);
     {
-        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+        VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         VkSubmitInfo info               = {};
         info.sType                      = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        info.waitSemaphoreCount         = 1;
-        info.pWaitSemaphores            = &imageAcquiredSemaphore;
-        info.pWaitDstStageMask          = &wait_stage;
-        info.commandBufferCount         = 1;
-        info.pCommandBuffers            = &fd->commandBuffer;
-        info.signalSemaphoreCount       = 1;
-        info.pSignalSemaphores          = &renderCompleteSemaphore;
+#ifdef SAF_CUDA_INTEROP
+        info.waitSemaphoreCount   = 1 + (!firstFrame ? imageSemaphores.size() : 0);
+        info.signalSemaphoreCount = 1 + imageSemaphores.size();
+
+        std::vector<VkSemaphore> waitSems(info.waitSemaphoreCount);     // FIXME: Possibly slow?
+        std::vector<VkSemaphore> signalSems(info.signalSemaphoreCount); // FIXME: Possibly slow?
+        I32 i           = 0;
+        waitSems[i]     = imageAcquiredSemaphore;
+        signalSems[i++] = renderCompleteSemaphore;
+
+        for (auto&& [_, v] : imageSemaphores)
+        {
+            if (!firstFrame)
+                waitSems[i] = v.cudaUpdateVkSemaphore;
+            signalSems[i++] = v.vkUpdateCudaSemaphore;
+        }
+
+        info.pWaitSemaphores    = waitSems.data();
+        info.pWaitDstStageMask  = &waitStage;
+        info.commandBufferCount = 1;
+        info.pCommandBuffers    = &fd->commandBuffer;
+        info.pSignalSemaphores  = signalSems.data();
+#else
+        info.waitSemaphoreCount   = 1;
+        info.pWaitSemaphores      = &imageAcquiredSemaphore;
+        info.pWaitDstStageMask    = &waitStage;
+        info.commandBufferCount   = 1;
+        info.pCommandBuffers      = &fd->commandBuffer;
+        info.signalSemaphoreCount = 1;
+        info.pSignalSemaphores    = &renderCompleteSemaphore;
+#endif
 
         err = vkEndCommandBuffer(fd->commandBuffer);
         checkVkResult(err);
@@ -353,6 +524,27 @@ static void framePresent(VulkanContext* context)
     context->semaphoreIndex = (context->semaphoreIndex + 1) % context->semaphoreCount; // Now we can use the next set of semaphores
 }
 
+#ifdef SAF_CUDA_INTEROP
+void ApplicationContext::registerImage(VkImage image)
+{
+    mContextSemaphores.imageSemaphores.insert({ image, ImageSemaphores() });
+}
+
+void ApplicationContext::registerImage(VkImage image, const ImageSemaphores& imageSemaphores)
+{
+    mContextSemaphores.imageSemaphores.insert({ image, imageSemaphores });
+}
+
+void ApplicationContext::deregisterImage(VkImage image)
+{
+    auto it = mContextSemaphores.imageSemaphores.find(image);
+    if (it != mContextSemaphores.imageSemaphores.end())
+    {
+        mContextSemaphores.imageSemaphores.erase(image);
+    }
+}
+#endif
+
 Application::Application(const ApplicationSettings& settings)
     : mName(settings.name)
     , mWindowWidth(settings.windowWidth)
@@ -361,7 +553,16 @@ Application::Application(const ApplicationSettings& settings)
     , mClearColor(settings.clearColor)
     , mRunning(true)
 {
+    mApplicationContext = std::make_shared<ApplicationContext>();
     initVulkanGLFW();
+
+    mApplicationContext->mInstanceRef       = gInstance;
+    mApplicationContext->mPhysicalDeviceRef = gPhysicalDevice;
+    mApplicationContext->mDeviceRef         = gDevice;
+
+    mApplicationContext->mQueueRef         = gQueue;
+    mApplicationContext->mCommandPoolRef   = mVulkanContext->ressourceCommandPool;
+    mApplicationContext->mCommandBufferRef = mVulkanContext->ressourceCommandBuffer;
 }
 
 Application::~Application()
@@ -402,7 +603,6 @@ bool Application::initVulkanGLFW()
     VkSurfaceKHR surface;
     VkResult err = glfwCreateWindowSurface(gInstance, mWindow, gAllocator, &surface);
     checkVkResult(err);
-
     // Create Framebuffers
     I32 w, h;
     glfwGetFramebufferSize(mWindow, &w, &h);
@@ -484,54 +684,12 @@ void Application::shutdownVulkanGLFW()
     glfwTerminate();
 }
 
-VkPhysicalDevice Application::getPhysicalDevice()
-{
-    return gPhysicalDevice;
-}
-
-VkDevice Application::getDevice()
-{
-    return gDevice;
-}
-
-VkQueue Application::getQueue()
-{
-    return gQueue;
-}
-
-VkCommandPool Application::getCommandPool()
-{
-    return mVulkanContext->ressourceCommandPool;
-}
-
-VkCommandBuffer Application::getCommandBuffer()
-{
-    return mVulkanContext->ressourceCommandBuffer;
-}
-
 void Application::run()
 {
+    bool firstFrame = true;
     while (!glfwWindowShouldClose(mWindow) && mRunning)
     {
-        glfwPollEvents();
-
-        float dt = ImGui::GetIO().DeltaTime; // FIXME: delta time...
-
-        for (auto& layer : mLayerStack)
-        {
-            layer->onUpdate(this, dt);
-
-#ifdef SAF_SCRIPTING
-            for (auto it = layer->mScripts.begin(); it != layer->mScripts.end(); it++)
-            {
-                layer->updateScript(it, dt);
-            }
-#endif
-        }
-
-        I32 width, height;
-        glfwGetFramebufferSize(mWindow, &width, &height);
-        if (width > 0 && height > 0 && (gSwapChainRebuild || gVulkanContext.width != width || gVulkanContext.height != height))
+        if (gSwapChainRebuild)
         {
             if (width > 0 && height > 0)
             {
@@ -598,7 +756,12 @@ void Application::run()
         mVulkanContext->clearValue.color.float32[3] = mClearColor.w();
         if (!mainMinimized)
         {
+#ifdef SAF_CUDA_INTEROP
+            frameRender(mVulkanContext, mainDrawData, firstFrame, mApplicationContext->mContextSemaphores.imageSemaphores);
+#else
             frameRender(mVulkanContext, mainDrawData);
+#endif
+            firstFrame = false;
         }
 
         ImGuiIO& io = ImGui::GetIO();
@@ -612,6 +775,22 @@ void Application::run()
         if (!mainMinimized)
         {
             framePresent(mVulkanContext);
+        }
+
+        glfwPollEvents();
+
+        float dt = ImGui::GetIO().DeltaTime; // FIXME: delta time...
+
+        for (auto& layer : mLayerStack)
+        {
+            layer->onUpdate(this, dt);
+
+#ifdef SAF_SCRIPTING
+            for (auto it = layer->mScripts.begin(); it != layer->mScripts.end(); it++)
+            {
+                layer->updateScript(it, dt);
+            }
+#endif
         }
     }
 

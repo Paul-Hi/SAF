@@ -1,8 +1,10 @@
+#include "demo.cuh"
 #include "random.hpp"
 #include "test.hpp"
 #include <app/application.hpp>
 #include <app/parameter.hpp>
 #include <core/image.hpp>
+#include <core/types.hpp>
 #include <imgui.h>
 #include <implot.h>
 #include <implot3d.h>
@@ -17,7 +19,11 @@ public:
     virtual void onAttach(Application* application) override
     {
         mData.resize(720 * 720, Eigen::Vector4<Byte>(255, 0, 0, 255));
-        mImage = std::make_shared<Image>(application->getPhysicalDevice(), application->getDevice(), application->getQueue(), application->getCommandPool(), application->getCommandBuffer(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
+#ifdef SAF_CUDA_INTEROP
+        mImage = std::make_shared<Image>(application->getApplicationContext(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data(), true);
+#else
+        mImage = std::make_shared<Image>(application->getApplicationContext(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
+#endif
         mRandom.set(RandGen(mSeed));
 #if defined(SAF_SCRIPTING) && defined(SAF_FILE_WATCH)
         loadScript(
@@ -40,6 +46,9 @@ public:
 
     virtual void onUpdate(Application* application, F32 dt) override
     {
+#ifdef SAF_CUDA_INTEROP
+        mImage->awaitCudaUpdateClearance();
+#endif
         if (mUpdate)
         {
             mUpdate = false;
@@ -58,8 +67,15 @@ public:
                     255);
             }
 
-            mImage->update(application->getPhysicalDevice(), application->getDevice(), application->getQueue(), application->getCommandPool(), application->getCommandBuffer(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
+            mImage->update(720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
+
+#ifdef SAF_CUDA_INTEROP
+            callGrayScaleKernel(mImage->getCudaSurfaceObject(), mImage->getCudaTextureObject(), mImage->getWidth(), mImage->getHeight());
+#endif
         }
+#ifdef SAF_CUDA_INTEROP
+        mImage->signalVulkanUpdateClearance();
+#endif
     }
 
     virtual void onUIRender(Application* application) override
