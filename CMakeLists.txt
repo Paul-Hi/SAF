@@ -103,6 +103,15 @@ FetchContent_Declare(
     GIT_PROGRESS ON
 )
 
+# ImGuiFileDialog
+FetchContent_Declare(
+    imfile
+    GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
+    GIT_TAG v0.6.7
+    GIT_SHALLOW ON
+    GIT_PROGRESS ON
+)
+
 # Eigen
 FetchContent_Declare(eigen
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
@@ -122,6 +131,7 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(imgui implot eigen glfw)
+FetchContent_Populate(imfile)
 
 # pybind11
 # FetchContent_Declare(
@@ -164,7 +174,7 @@ if(SAF_ENABLE_FILE_WATCH)
     # ----- efsw -----
     FetchContent_Declare(efsw
         GIT_REPOSITORY https://github.com/SpartanJ/efsw
-        GIT_TAG 341934765471e4074e90bb5205ff4a65c16499c6
+        GIT_TAG 1.4.0
         GIT_SHALLOW ON
         GIT_PROGRESS ON
     )
@@ -191,8 +201,10 @@ add_library(imgui STATIC
     ${implot_SOURCE_DIR}/implot.cpp
     ${implot_SOURCE_DIR}/implot_demo.cpp
     ${implot_SOURCE_DIR}/implot_items.cpp
+
+    ${imfile_SOURCE_DIR}/ImGuiFileDialog.cpp
 )
-target_include_directories(imgui PUBLIC . ${glfw_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS} ${imgui_SOURCE_DIR} ${implot_SOURCE_DIR})
+target_include_directories(imgui PUBLIC . ${glfw_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS} ${imgui_SOURCE_DIR} ${implot_SOURCE_DIR} ${imfile_SOURCE_DIR})
 target_link_directories(imgui PRIVATE ${CMAKE_BINARY_DIR})
 target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
 
