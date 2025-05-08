@@ -73,10 +73,8 @@ set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE ALWAYS)
 find_package(Vulkan REQUIRED)
 
 if(SAF_ENABLE_CUDA_INTEROP)
-    # CUDA and Thrust
+    # CUDA
     enable_language(CUDA)
-    find_package(Thrust REQUIRED CONFIG)
-    thrust_create_target(Thrust)
 endif()
 
 cmake_language(GET_MESSAGE_LOG_LEVEL CMAKE_MESSAGE_LOG_LEVEL_BACKUP)
