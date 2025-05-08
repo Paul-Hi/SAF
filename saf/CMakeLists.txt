@@ -70,6 +70,12 @@ target_compile_options(saf
     $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v -Xcompiler=-fopenmp>
 )
 
+find_package(OpenMP)
+
+if(OpenMP_CXX_FOUND)
+  target_link_libraries(saf PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
 add_library(saf::saf ALIAS saf)
 
 install(TARGETS saf DESTINATION lib)

@@ -406,7 +406,11 @@ static void cleanupVulkanWindow()
     vkDestroyContext(gInstance, gDevice, &gVulkanContext, gAllocator);
 }
 
+#ifdef SAF_CUDA_INTEROP
 static void frameRender(VulkanContext* context, ImDrawData* draw_data, bool firstFrame, const std::unordered_map<VkImage, ApplicationContext::ImageSemaphores>& imageSemaphores)
+#else
+static void frameRender(VulkanContext* context, ImDrawData* draw_data)
+#endif
 {
     VkResult err;
 
@@ -456,11 +460,12 @@ static void frameRender(VulkanContext* context, ImDrawData* draw_data, bool firs
     vkCmdEndRenderPass(fd->commandBuffer);
     {
 
-        VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         VkSubmitInfo info               = {};
         info.sType                      = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        info.waitSemaphoreCount         = 1 + (!firstFrame ? imageSemaphores.size() : 0);
-        info.signalSemaphoreCount       = 1 + imageSemaphores.size();
+#ifdef SAF_CUDA_INTEROP
+        info.waitSemaphoreCount   = 1 + (!firstFrame ? imageSemaphores.size() : 0);
+        info.signalSemaphoreCount = 1 + imageSemaphores.size();
 
         std::vector<VkSemaphore> waitSems(info.waitSemaphoreCount);     // FIXME: Possibly slow?
         std::vector<VkSemaphore> signalSems(info.signalSemaphoreCount); // FIXME: Possibly slow?
@@ -476,10 +481,19 @@ static void frameRender(VulkanContext* context, ImDrawData* draw_data, bool firs
         }
 
         info.pWaitSemaphores    = waitSems.data();
-        info.pWaitDstStageMask  = &wait_stage;
+        info.pWaitDstStageMask  = &waitStage;
         info.commandBufferCount = 1;
         info.pCommandBuffers    = &fd->commandBuffer;
         info.pSignalSemaphores  = signalSems.data();
+#else
+        info.waitSemaphoreCount   = 1;
+        info.pWaitSemaphores      = &imageAcquiredSemaphore;
+        info.pWaitDstStageMask    = &waitStage;
+        info.commandBufferCount   = 1;
+        info.pCommandBuffers      = &fd->commandBuffer;
+        info.signalSemaphoreCount = 1;
+        info.pSignalSemaphores    = &renderCompleteSemaphore;
+#endif
 
         err = vkEndCommandBuffer(fd->commandBuffer);
         checkVkResult(err);
@@ -510,6 +524,7 @@ static void framePresent(VulkanContext* context)
     context->semaphoreIndex = (context->semaphoreIndex + 1) % context->semaphoreCount; // Now we can use the next set of semaphores
 }
 
+#ifdef SAF_CUDA_INTEROP
 void ApplicationContext::registerImage(VkImage image)
 {
     mContextSemaphores.imageSemaphores.insert({ image, ImageSemaphores() });
@@ -528,6 +543,7 @@ void ApplicationContext::deregisterImage(VkImage image)
         mContextSemaphores.imageSemaphores.erase(image);
     }
 }
+#endif
 
 Application::Application(const ApplicationSettings& settings)
     : mName(settings.name)
@@ -731,7 +747,11 @@ void Application::run()
         mVulkanContext->clearValue.color.float32[3] = mClearColor.w();
         if (!mainMinimized)
         {
+#ifdef SAF_CUDA_INTEROP
             frameRender(mVulkanContext, mainDrawData, firstFrame, mApplicationContext->mContextSemaphores.imageSemaphores);
+#else
+            frameRender(mVulkanContext, mainDrawData);
+#endif
             firstFrame = false;
         }
 

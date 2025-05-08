@@ -72,9 +72,6 @@ set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE ALWAYS)
 # Vulkan
 find_package(Vulkan REQUIRED)
 
-# OpenMP
-find_package(OpenMP)
-
 if(SAF_ENABLE_CUDA_INTEROP)
     # CUDA and Thrust
     enable_language(CUDA)
@@ -84,6 +81,7 @@ endif()
 
 cmake_language(GET_MESSAGE_LOG_LEVEL CMAKE_MESSAGE_LOG_LEVEL_BACKUP)
 set(CMAKE_MESSAGE_LOG_LEVEL ERROR)
+set(FETCHCONTENT_QUIET ON)
 
 # imgui
 FetchContent_Declare(

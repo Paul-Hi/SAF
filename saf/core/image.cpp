@@ -53,7 +53,7 @@ Image::Image(const std::shared_ptr<ApplicationContext>& applicationContext, U32 
 
     allocateMemory(applicationContext->mPhysicalDeviceRef, applicationContext->mDeviceRef, applicationContext->mQueueRef, applicationContext->mCommandPoolRef, applicationContext->mCommandBufferRef);
 
-    update(applicationContext->mPhysicalDeviceRef, applicationContext->mDeviceRef, applicationContext->mQueueRef, applicationContext->mCommandPoolRef, applicationContext->mCommandBufferRef, width, height, format, data);
+    update(width, height, format, data);
 }
 #else
 Image::Image(const std::shared_ptr<ApplicationContext>& applicationContext, U32 width, U32 height, VkFormat format, const void* data, bool shareWithCuda)
@@ -170,7 +170,10 @@ void Image::update(U32 width, U32 height, VkFormat format, const void* data)
 
     if (mWidth != width || mHeight != height)
     {
+#ifdef SAF_CUDA_INTEROP
         mApplicationContext->deregisterImage(mImage);
+#endif
+
         vkDeviceWaitIdle(mApplicationContext->mDeviceRef);
         mWidth  = width;
         mHeight = height;
@@ -500,7 +503,9 @@ void Image::release()
 
 Image::~Image()
 {
+#ifdef SAF_CUDA_INTEROP
     mApplicationContext->deregisterImage(mImage);
+#endif
     release();
 }
 
