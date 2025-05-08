@@ -377,15 +377,15 @@ void Image::allocateMemory(VkPhysicalDevice physicalDevice, VkDevice logicalDevi
 
             cudaTextureDesc texDescr{};
             texDescr.normalizedCoords = true;
-            texDescr.filterMode       = cudaFilterModeLinear;
-            texDescr.mipmapFilterMode = cudaFilterModeLinear;
+            texDescr.filterMode       = cudaFilterModePoint;
+            texDescr.mipmapFilterMode = cudaFilterModePoint;
 
             texDescr.addressMode[0] = cudaAddressModeWrap;
             texDescr.addressMode[1] = cudaAddressModeWrap;
 
             texDescr.maxMipmapLevelClamp = 0;
 
-            texDescr.readMode = cudaReadModeNormalizedFloat;
+            texDescr.readMode = cudaReadModeElementType;
 
             CUDA_CHECK(cudaCreateTextureObject(&mCudaTextureObject, &resDescr, &texDescr, NULL));
         }
