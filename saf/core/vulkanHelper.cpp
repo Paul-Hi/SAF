@@ -2,12 +2,16 @@
  * @file      vulkanHelper.cpp
  * @author    Paul Himmler
  * @version   0.01
- * @date      2024
+ * @date      2025
  * @copyright Apache License 2.0
  */
 
 #include "vulkanHelper.hpp"
 #include <imgui.h>
+
+#ifndef IM_MAX
+#define IM_MAX(A, B) (((A) >= (B)) ? (A) : (B))
+#endif
 
 using namespace saf;
 
@@ -17,8 +21,9 @@ using namespace saf;
 // This needs to be used along with a Platform Backend (e.g. GLFW, SDL, Win32, custom..)
 
 // Implemented features:
-//  [x] Renderer: User texture binding. Use 'VkDescriptorSet' as ImTextureID. Read the FAQ about ImTextureID! See https://github.com/ocornut/imgui/pull/914 for discussions.
-//  [X] Renderer: Large meshes support (64k+ vertices) with 16-bit indices.
+//  [!] Renderer: User texture binding. Use 'VkDescriptorSet' as ImTextureID. Call ImGui_ImplVulkan_AddTexture() to register one. Read the FAQ about ImTextureID! See https://github.com/ocornut/imgui/pull/914 for discussions.
+//  [X] Renderer: Large meshes support (64k+ vertices) even with 16-bit indices (ImGuiBackendFlags_RendererHasVtxOffset).
+//  [X] Renderer: Expose selected render state for draw callbacks to use. Access in '(ImGui_ImplXXXX_RenderState*)GetPlatformIO().Renderer_RenderState'.
 //  [x] Renderer: Multi-viewport / platform windows. With issues (flickering when creating a new viewport).
 
 // Important: on 32-bit systems, user texture binding is only supported if your imconfig file has '#define ImTextureID ImU64'.
@@ -55,11 +60,24 @@ struct VulkanContextRenderBuffers
 {
     U32 index;
     U32 count;
-    VulkanFrameRenderBuffers* frameRenderBuffers;
+    ImVector<VulkanFrameRenderBuffers> frameRenderBuffers;
 
     VulkanContextRenderBuffers()
     {
         memset(static_cast<void*>(this), 0, sizeof(*this));
+    }
+};
+
+struct VulkanTexture
+{
+    VkDeviceMemory memory;
+    VkImage image;
+    VkImageView imageView;
+    VkDescriptorSet descriptorSet;
+
+    VulkanTexture()
+    {
+        memset((void*)this, 0, sizeof(*this));
     }
 };
 
@@ -70,10 +88,12 @@ struct VulkanViewportData
     bool contextOwned;
     VulkanContext context;                    // Used by secondary viewports only
     VulkanContextRenderBuffers renderBuffers; // Used by all viewports
+    bool swapChainNeedRebuild;                // Flag when viewport swapchain resized in the middle of processing a frame
+    bool swapChainSuboptimal;                 // Flag when VK_SUBOPTIMAL_KHR was returned.
 
     VulkanViewportData()
     {
-        contextOwned = false;
+        contextOwned = swapChainNeedRebuild = swapChainSuboptimal = false;
         memset(&renderBuffers, 0, sizeof(renderBuffers));
     }
     ~VulkanViewportData() {}
@@ -83,24 +103,21 @@ struct VulkanViewportData
 struct VulkanData
 {
     VulkanInitInfo vulkanInitInfo;
-    VkRenderPass renderPass;
     VkDeviceSize bufferMemoryAlignment;
     VkPipelineCreateFlags pipelineCreateFlags;
     VkDescriptorSetLayout descriptorSetLayout;
     VkPipelineLayout pipelineLayout;
     VkPipeline pipeline;
-    U32 subpass;
+    VkPipeline pipelineForViewports;
     VkShaderModule shaderModuleVert;
     VkShaderModule shaderModuleFrag;
+    VkDescriptorPool descriptorPool;
 
-    // Font data
-    VkSampler fontSampler;
-    VkDeviceMemory fontMemory;
-    VkImage fontImage;
-    VkImageView fontView;
-    VkDescriptorSet fontDescriptorSet;
-    VkDeviceMemory uploadBufferMemory;
-    VkBuffer uploadBuffer;
+    // Texture Management
+    VulkanTexture fontTexture;
+    VkSampler texSampler;
+    VkCommandPool texCommandPool;
+    VkCommandBuffer texCommandBuffer;
 
     // Render buffers for main window
     VulkanContextRenderBuffers mainContextRenderBuffers;
@@ -115,13 +132,13 @@ struct VulkanData
 // Forward Declarations
 bool vkCreateDeviceObjects();
 void vkDestroyDeviceObjects();
-void vkDestroyFrame(VkDevice logicalDevice, VulkanFrameData* fd, const VkAllocationCallbacks* allocator);
-void vkDestroyFrameSemaphores(VkDevice logicalDevice, VulkanFrameSemaphores* fsd, const VkAllocationCallbacks* allocator);
 void vkDestroyFrameRenderBuffers(VkDevice logicalDevice, VulkanFrameRenderBuffers* buffers, const VkAllocationCallbacks* allocator);
 void vkDestroyContextRenderBuffers(VkDevice logicalDevice, VulkanContextRenderBuffers* buffers, const VkAllocationCallbacks* allocator);
+void vkDestroyFrame(VkDevice logicalDevice, VulkanFrameData* fd, const VkAllocationCallbacks* allocator);
+void vkDestroyFrameSemaphores(VkDevice logicalDevice, VulkanFrameSemaphores* fsd, const VkAllocationCallbacks* allocator);
 void vkDestroyAllViewportsRenderBuffers(VkDevice logicalDevice, const VkAllocationCallbacks* allocator);
-void vkCreatecontextSwapChain(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VulkanContext* context, const VkAllocationCallbacks* allocator, I32 width, I32 height, U32 minImageCount);
-void vkCreatecontextCommandBuffers(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VulkanContext* context, U32 queueFamily, const VkAllocationCallbacks* allocator);
+void vkCreateContextSwapChain(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VulkanContext* context, const VkAllocationCallbacks* allocator, I32 width, I32 height, U32 minImageCount);
+void vkCreateContextCommandBuffers(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VulkanContext* context, U32 queueFamily, const VkAllocationCallbacks* allocator);
 
 // Vulkan prototypes for use with custom loaders
 // (see description of VK_NO_PROTOTYPES in vulkanHelper.hpp
@@ -209,8 +226,7 @@ VULKAN_FUNC_MAP(VULKAN_FUNC_DEF)
 #undef VULKAN_FUNC_DEF
 #endif // VK_NO_PROTOTYPES
 
-#if defined(VK_VERSION_1_3) || defined(VK_KHR_dynamic_rendering)
-#define IMPL_VULKAN_HAS_DYNAMIC_RENDERING
+#ifdef IMPL_VULKAN_HAS_DYNAMIC_RENDERING
 static PFN_vkCmdBeginRenderingKHR VulkanFuncs_vkCmdBeginRenderingKHR;
 static PFN_vkCmdEndRenderingKHR VulkanFuncs_vkCmdEndRenderingKHR;
 #endif
@@ -220,8 +236,8 @@ static PFN_vkCmdEndRenderingKHR VulkanFuncs_vkCmdEndRenderingKHR;
 //-----------------------------------------------------------------------------
 
 // Forward Declarations
-static void vkInitPlatformInterface();
-static void vkShutdownPlatformInterface();
+static void vkInitMultiViewportSupport();
+static void vkShutdownMultiViewportSupport();
 
 // glsl_shader.vert, compiled with:
 // # glslangValidator -V -x -o glsl_shader.vert.u32 glsl_shader.vert
@@ -368,6 +384,12 @@ static void checkVkResultBD(VkResult err)
     }
 }
 
+// Same as IM_MEMALIGN(). 'alignment' must be a power of two.
+static inline VkDeviceSize alignBufferSize(VkDeviceSize size, VkDeviceSize alignment)
+{
+    return (size + alignment - 1) & ~(alignment - 1);
+}
+
 static void createOrResizeBuffer(VkBuffer& buffer, VkDeviceMemory& bufferMemory, VkDeviceSize& outBufferSize, PtrSize newSize, VkBufferUsageFlagBits usage)
 {
     VulkanData* bd    = vkGetBackendData();
@@ -382,7 +404,7 @@ static void createOrResizeBuffer(VkBuffer& buffer, VkDeviceMemory& bufferMemory,
         vkFreeMemory(v->device, bufferMemory, v->allocator);
     }
 
-    VkDeviceSize vertexBufferAlignedSize = ((newSize - 1) / bd->bufferMemoryAlignment + 1) * bd->bufferMemoryAlignment;
+    VkDeviceSize vertexBufferAlignedSize = alignBufferSize(IM_MAX(v->minAllocationSize, newSize), bd->bufferMemoryAlignment);
     VkBufferCreateInfo bufferInfo        = {};
     bufferInfo.sType                     = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size                      = vertexBufferAlignedSize;
@@ -472,12 +494,12 @@ void saf::vkRenderImGuiDrawData(ImDrawData* drawData, VkCommandBuffer commandBuf
     VulkanViewportData* viewportRendererData = static_cast<VulkanViewportData*>(drawData->OwnerViewport->RendererUserData);
     SAF_ASSERT(viewportRendererData != nullptr);
     VulkanContextRenderBuffers* wrb = &viewportRendererData->renderBuffers;
-    if (wrb->frameRenderBuffers == nullptr)
+    if (wrb->frameRenderBuffers.Size == 0)
     {
-        wrb->index              = 0;
-        wrb->count              = v->imageCount;
-        wrb->frameRenderBuffers = static_cast<VulkanFrameRenderBuffers*>(IM_ALLOC(sizeof(VulkanFrameRenderBuffers) * wrb->count));
-        memset(wrb->frameRenderBuffers, 0, sizeof(VulkanFrameRenderBuffers) * wrb->count);
+        wrb->index = 0;
+        wrb->count = v->imageCount;
+        wrb->frameRenderBuffers.resize(wrb->count);
+        memset(wrb->frameRenderBuffers.Data, 0, wrb->frameRenderBuffers.size_in_bytes());
     }
     SAF_ASSERT(wrb->count == v->imageCount);
     wrb->index                   = (wrb->index + 1) % wrb->count;
@@ -486,8 +508,8 @@ void saf::vkRenderImGuiDrawData(ImDrawData* drawData, VkCommandBuffer commandBuf
     if (drawData->TotalVtxCount > 0)
     {
         // Create or resize the vertex/index buffers
-        PtrSize vertexSize = drawData->TotalVtxCount * sizeof(ImDrawVert);
-        PtrSize indexSize  = drawData->TotalIdxCount * sizeof(ImDrawIdx);
+        VkDeviceSize vertexSize = alignBufferSize(drawData->TotalVtxCount * sizeof(ImDrawVert), bd->bufferMemoryAlignment);
+        VkDeviceSize indexSize  = alignBufferSize(drawData->TotalIdxCount * sizeof(ImDrawIdx), bd->bufferMemoryAlignment);
         if (rb->vertexBuffer == VK_NULL_HANDLE || rb->vertexBufferSize < vertexSize)
         {
             createOrResizeBuffer(rb->vertexBuffer, rb->vertexBufferMemory, rb->vertexBufferSize, vertexSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
@@ -527,6 +549,14 @@ void saf::vkRenderImGuiDrawData(ImDrawData* drawData, VkCommandBuffer commandBuf
 
     // Setup desired Vulkan state
     vkSetupImGuiRenderState(drawData, pipeline, commandBuffer, rb, width, height);
+
+    // Setup render state structure (for callbacks and custom texture bindings)
+    ImGuiPlatformIO& platformIo = ImGui::GetPlatformIO();
+    VulkanRenderState renderState;
+    renderState.commandBuffer       = commandBuffer;
+    renderState.pipeline            = pipeline;
+    renderState.pipelineLayout      = bd->pipelineLayout;
+    platformIo.Renderer_RenderState = &renderState;
 
     // Will project scissor/clipping rectangles into framebuffer space
     ImVec2 clipOff   = drawData->DisplayPos;       // (0,0) unless using multi-viewports
@@ -592,14 +622,8 @@ void saf::vkRenderImGuiDrawData(ImDrawData* drawData, VkCommandBuffer commandBuf
                 vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
                 // Bind DescriptorSet with font or user texture
-                VkDescriptorSet descSet[1] = { static_cast<VkDescriptorSet>(pcmd->TextureId) };
-                if (sizeof(ImTextureID) < sizeof(ImU64))
-                {
-                    // We don't support texture switches if ImTextureID hasn't been redefined to be 64-bit. Do a flaky check that other textures haven't been used.
-                    SAF_ASSERT(pcmd->TextureId == static_cast<ImTextureID>(bd->fontDescriptorSet));
-                    descSet[0] = bd->fontDescriptorSet;
-                }
-                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bd->pipelineLayout, 0, 1, descSet, 0, nullptr);
+                VkDescriptorSet descSet = reinterpret_cast<VkDescriptorSet>(pcmd->GetTexID());
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bd->pipelineLayout, 0, 1, &descSet, 0, nullptr);
 
                 // Draw
                 vkCmdDrawIndexed(commandBuffer, pcmd->ElemCount, 1, pcmd->IdxOffset + globalIndexOffset, pcmd->VtxOffset + globalVertexOffset, 0);
@@ -608,6 +632,7 @@ void saf::vkRenderImGuiDrawData(ImDrawData* drawData, VkCommandBuffer commandBuf
         globalIndexOffset += cmdList->IdxBuffer.Size;
         globalVertexOffset += cmdList->VtxBuffer.Size;
     }
+    platformIo.Renderer_RenderState = nullptr;
 
     // Note: at this point both vkCmdSetViewport() and vkCmdSetScissor() have been called.
     // Our last values will leak into user/application rendering IF:
@@ -620,20 +645,57 @@ void saf::vkRenderImGuiDrawData(ImDrawData* drawData, VkCommandBuffer commandBuf
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 }
 
-bool saf::vkCreateImGuiFontsTexture(VkCommandBuffer commandBuffer)
+bool saf::vkCreateImGuiFontsTexture()
 {
     ImGuiIO& io       = ImGui::GetIO();
     VulkanData* bd    = vkGetBackendData();
     VulkanInitInfo* v = &bd->vulkanInitInfo;
-
-    unsigned char* pixels;
-    I32 width, height, bytesPerPixel;
-    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height, &bytesPerPixel);
-    PtrSize uploadSize = width * height * bytesPerPixel;
-
     VkResult err;
 
+    // Destroy existing texture (if any)
+    if (bd->fontTexture.descriptorSet)
+    {
+        vkQueueWaitIdle(v->queue);
+        vkDestroyImGuiFontsTexture();
+    }
+
+    // Create command pool/buffer
+    if (bd->texCommandPool == VK_NULL_HANDLE)
+    {
+        VkCommandPoolCreateInfo info = {};
+        info.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        info.flags                   = 0;
+        info.queueFamilyIndex        = v->queueFamily;
+        vkCreateCommandPool(v->device, &info, v->allocator, &bd->texCommandPool);
+    }
+    if (bd->texCommandBuffer == VK_NULL_HANDLE)
+    {
+        VkCommandBufferAllocateInfo info = {};
+        info.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        info.commandPool                 = bd->texCommandPool;
+        info.commandBufferCount          = 1;
+        err                              = vkAllocateCommandBuffers(v->device, &info, &bd->texCommandBuffer);
+        checkVkResultBD(err);
+    }
+
+    // Start command buffer
+    {
+        err = vkResetCommandPool(v->device, bd->texCommandPool, 0);
+        checkVkResultBD(err);
+        VkCommandBufferBeginInfo beginInfo = {};
+        beginInfo.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        err = vkBeginCommandBuffer(bd->texCommandBuffer, &beginInfo);
+        checkVkResultBD(err);
+    }
+
+    unsigned char* pixels;
+    I32 width, height;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    PtrSize uploadSize = width * height * 4 * sizeof(char);
+
     // Create the Image:
+    VulkanTexture* backendTex = &bd->fontTexture;
     {
         VkImageCreateInfo info = {};
         info.sType             = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -649,17 +711,17 @@ bool saf::vkCreateImGuiFontsTexture(VkCommandBuffer commandBuffer)
         info.usage             = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         info.sharingMode       = VK_SHARING_MODE_EXCLUSIVE;
         info.initialLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
-        err                    = vkCreateImage(v->device, &info, v->allocator, &bd->fontImage);
+        err                    = vkCreateImage(v->device, &info, v->allocator, &backendTex->image);
         checkVkResultBD(err);
         VkMemoryRequirements req;
-        vkGetImageMemoryRequirements(v->device, bd->fontImage, &req);
+        vkGetImageMemoryRequirements(v->device, backendTex->image, &req);
         VkMemoryAllocateInfo allocInfo = {};
         allocInfo.sType                = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize       = req.size;
+        allocInfo.allocationSize       = IM_MAX(v->minAllocationSize, req.size);
         allocInfo.memoryTypeIndex      = vkMemoryType(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, req.memoryTypeBits);
-        err                            = vkAllocateMemory(v->device, &allocInfo, v->allocator, &bd->fontMemory);
+        err                            = vkAllocateMemory(v->device, &allocInfo, v->allocator, &backendTex->memory);
         checkVkResultBD(err);
-        err = vkBindImageMemory(v->device, bd->fontImage, bd->fontMemory, 0);
+        err = vkBindImageMemory(v->device, backendTex->image, backendTex->memory, 0);
         checkVkResultBD(err);
     }
 
@@ -667,70 +729,72 @@ bool saf::vkCreateImGuiFontsTexture(VkCommandBuffer commandBuffer)
     {
         VkImageViewCreateInfo info       = {};
         info.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        info.image                       = bd->fontImage;
+        info.image                       = backendTex->image;
         info.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
         info.format                      = VK_FORMAT_R8G8B8A8_UNORM;
         info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         info.subresourceRange.levelCount = 1;
         info.subresourceRange.layerCount = 1;
-        err                              = vkCreateImageView(v->device, &info, v->allocator, &bd->fontView);
+        err                              = vkCreateImageView(v->device, &info, v->allocator, &backendTex->imageView);
         checkVkResultBD(err);
     }
 
     // Create the Descriptor Set:
-    bd->fontDescriptorSet = static_cast<VkDescriptorSet>(vkAddTexture(bd->fontSampler, bd->fontView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+    backendTex->descriptorSet = vkAddTexture(bd->texSampler, backendTex->imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     // Create the Upload Buffer:
+    VkDeviceMemory uploadBufferMemory;
+    VkBuffer uploadBuffer;
     {
         VkBufferCreateInfo bufferInfo = {};
         bufferInfo.sType              = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size               = uploadSize;
         bufferInfo.usage              = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         bufferInfo.sharingMode        = VK_SHARING_MODE_EXCLUSIVE;
-        err                           = vkCreateBuffer(v->device, &bufferInfo, v->allocator, &bd->uploadBuffer);
+        err                           = vkCreateBuffer(v->device, &bufferInfo, v->allocator, &uploadBuffer);
         checkVkResultBD(err);
         VkMemoryRequirements req;
-        vkGetBufferMemoryRequirements(v->device, bd->uploadBuffer, &req);
+        vkGetBufferMemoryRequirements(v->device, uploadBuffer, &req);
         bd->bufferMemoryAlignment      = (bd->bufferMemoryAlignment > req.alignment) ? bd->bufferMemoryAlignment : req.alignment;
         VkMemoryAllocateInfo allocInfo = {};
         allocInfo.sType                = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize       = req.size;
+        allocInfo.allocationSize       = IM_MAX(v->minAllocationSize, req.size);
         allocInfo.memoryTypeIndex      = vkMemoryType(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, req.memoryTypeBits);
-        err                            = vkAllocateMemory(v->device, &allocInfo, v->allocator, &bd->uploadBufferMemory);
+        err                            = vkAllocateMemory(v->device, &allocInfo, v->allocator, &uploadBufferMemory);
         checkVkResultBD(err);
-        err = vkBindBufferMemory(v->device, bd->uploadBuffer, bd->uploadBufferMemory, 0);
+        err = vkBindBufferMemory(v->device, uploadBuffer, uploadBufferMemory, 0);
         checkVkResultBD(err);
     }
 
     // Upload to Buffer:
     {
         char* map = nullptr;
-        err       = vkMapMemory(v->device, bd->uploadBufferMemory, 0, uploadSize, 0, reinterpret_cast<void**>(&map));
+        err       = vkMapMemory(v->device, uploadBufferMemory, 0, uploadSize, 0, (void**)(&map));
         checkVkResultBD(err);
         memcpy(map, pixels, uploadSize);
         VkMappedMemoryRange range[1] = {};
         range[0].sType               = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        range[0].memory              = bd->uploadBufferMemory;
+        range[0].memory              = uploadBufferMemory;
         range[0].size                = uploadSize;
         err                          = vkFlushMappedMemoryRanges(v->device, 1, range);
         checkVkResultBD(err);
-        vkUnmapMemory(v->device, bd->uploadBufferMemory);
+        vkUnmapMemory(v->device, uploadBufferMemory);
     }
 
     // Copy to Image:
     {
-        VkImageMemoryBarrier copy_barrier[1]        = {};
-        copy_barrier[0].sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        copy_barrier[0].dstAccessMask               = VK_ACCESS_TRANSFER_WRITE_BIT;
-        copy_barrier[0].oldLayout                   = VK_IMAGE_LAYOUT_UNDEFINED;
-        copy_barrier[0].newLayout                   = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        copy_barrier[0].srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
-        copy_barrier[0].dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
-        copy_barrier[0].image                       = bd->fontImage;
-        copy_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copy_barrier[0].subresourceRange.levelCount = 1;
-        copy_barrier[0].subresourceRange.layerCount = 1;
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, copy_barrier);
+        VkImageMemoryBarrier copyBarrier[1]        = {};
+        copyBarrier[0].sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        copyBarrier[0].dstAccessMask               = VK_ACCESS_TRANSFER_WRITE_BIT;
+        copyBarrier[0].oldLayout                   = VK_IMAGE_LAYOUT_UNDEFINED;
+        copyBarrier[0].newLayout                   = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        copyBarrier[0].srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        copyBarrier[0].dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        copyBarrier[0].image                       = backendTex->image;
+        copyBarrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        copyBarrier[0].subresourceRange.levelCount = 1;
+        copyBarrier[0].subresourceRange.layerCount = 1;
+        vkCmdPipelineBarrier(bd->texCommandBuffer, VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, copyBarrier);
 
         VkBufferImageCopy region           = {};
         region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -738,27 +802,74 @@ bool saf::vkCreateImGuiFontsTexture(VkCommandBuffer commandBuffer)
         region.imageExtent.width           = width;
         region.imageExtent.height          = height;
         region.imageExtent.depth           = 1;
-        vkCmdCopyBufferToImage(commandBuffer, bd->uploadBuffer, bd->fontImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        vkCmdCopyBufferToImage(bd->texCommandBuffer, uploadBuffer, backendTex->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-        VkImageMemoryBarrier use_barrier[1]        = {};
-        use_barrier[0].sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        use_barrier[0].srcAccessMask               = VK_ACCESS_TRANSFER_WRITE_BIT;
-        use_barrier[0].dstAccessMask               = VK_ACCESS_SHADER_READ_BIT;
-        use_barrier[0].oldLayout                   = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        use_barrier[0].newLayout                   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        use_barrier[0].srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
-        use_barrier[0].dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
-        use_barrier[0].image                       = bd->fontImage;
-        use_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        use_barrier[0].subresourceRange.levelCount = 1;
-        use_barrier[0].subresourceRange.layerCount = 1;
-        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, use_barrier);
+        VkImageMemoryBarrier useBarrier[1]        = {};
+        useBarrier[0].sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        useBarrier[0].srcAccessMask               = VK_ACCESS_TRANSFER_WRITE_BIT;
+        useBarrier[0].dstAccessMask               = VK_ACCESS_SHADER_READ_BIT;
+        useBarrier[0].oldLayout                   = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        useBarrier[0].newLayout                   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        useBarrier[0].srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        useBarrier[0].dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        useBarrier[0].image                       = backendTex->image;
+        useBarrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        useBarrier[0].subresourceRange.levelCount = 1;
+        useBarrier[0].subresourceRange.layerCount = 1;
+        vkCmdPipelineBarrier(bd->texCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, useBarrier);
     }
 
     // Store our identifier
-    io.Fonts->SetTexID(static_cast<ImTextureID>(bd->fontDescriptorSet));
+    io.Fonts->SetTexID(reinterpret_cast<ImTextureID>(backendTex->descriptorSet));
+
+    // End command buffer
+    VkSubmitInfo endInfo       = {};
+    endInfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    endInfo.commandBufferCount = 1;
+    endInfo.pCommandBuffers    = &bd->texCommandBuffer;
+    err                        = vkEndCommandBuffer(bd->texCommandBuffer);
+    checkVkResultBD(err);
+    err = vkQueueSubmit(v->queue, 1, &endInfo, VK_NULL_HANDLE);
+    checkVkResultBD(err);
+
+    err = vkQueueWaitIdle(v->queue);
+    checkVkResultBD(err);
+
+    vkDestroyBuffer(v->device, uploadBuffer, v->allocator);
+    vkFreeMemory(v->device, uploadBufferMemory, v->allocator);
 
     return true;
+}
+
+void saf::vkDestroyImGuiFontsTexture()
+{
+    ImGuiIO& io       = ImGui::GetIO();
+    VulkanData* bd    = vkGetBackendData();
+    VulkanInitInfo* v = &bd->vulkanInitInfo;
+
+    VulkanTexture* backendTex = &bd->fontTexture;
+
+    if (backendTex->descriptorSet)
+    {
+        vkRemoveTexture(backendTex->descriptorSet);
+        backendTex->descriptorSet = VK_NULL_HANDLE;
+        io.Fonts->SetTexID(0);
+    }
+    if (backendTex->imageView)
+    {
+        vkDestroyImageView(v->device, backendTex->imageView, v->allocator);
+        backendTex->imageView = VK_NULL_HANDLE;
+    }
+    if (backendTex->image)
+    {
+        vkDestroyImage(v->device, backendTex->image, v->allocator);
+        backendTex->image = VK_NULL_HANDLE;
+    }
+    if (backendTex->memory)
+    {
+        vkFreeMemory(v->device, backendTex->memory, v->allocator);
+        backendTex->memory = VK_NULL_HANDLE;
+    }
 }
 
 static void vkCreateShaderModules(VkDevice logicalDevice, const VkAllocationCallbacks* allocator)
@@ -845,15 +956,15 @@ static void vkCreatePipeline(VkDevice logicalDevice, const VkAllocationCallbacks
     msInfo.sType                                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     msInfo.rasterizationSamples                 = (MSAASamples != 0) ? MSAASamples : VK_SAMPLE_COUNT_1_BIT;
 
-    VkPipelineColorBlendAttachmentState color_attachment[1] = {};
-    color_attachment[0].blendEnable                         = VK_TRUE;
-    color_attachment[0].srcColorBlendFactor                 = VK_BLEND_FACTOR_SRC_ALPHA;
-    color_attachment[0].dstColorBlendFactor                 = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    color_attachment[0].colorBlendOp                        = VK_BLEND_OP_ADD;
-    color_attachment[0].srcAlphaBlendFactor                 = VK_BLEND_FACTOR_ONE;
-    color_attachment[0].dstAlphaBlendFactor                 = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    color_attachment[0].alphaBlendOp                        = VK_BLEND_OP_ADD;
-    color_attachment[0].colorWriteMask                      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    VkPipelineColorBlendAttachmentState colorAttachment[1] = {};
+    colorAttachment[0].blendEnable                         = VK_TRUE;
+    colorAttachment[0].srcColorBlendFactor                 = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorAttachment[0].dstColorBlendFactor                 = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorAttachment[0].colorBlendOp                        = VK_BLEND_OP_ADD;
+    colorAttachment[0].srcAlphaBlendFactor                 = VK_BLEND_FACTOR_ONE;
+    colorAttachment[0].dstAlphaBlendFactor                 = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorAttachment[0].alphaBlendOp                        = VK_BLEND_OP_ADD;
+    colorAttachment[0].colorWriteMask                      = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     VkPipelineDepthStencilStateCreateInfo depthInfo = {};
     depthInfo.sType                                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -861,13 +972,13 @@ static void vkCreatePipeline(VkDevice logicalDevice, const VkAllocationCallbacks
     VkPipelineColorBlendStateCreateInfo blendInfo = {};
     blendInfo.sType                               = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     blendInfo.attachmentCount                     = 1;
-    blendInfo.pAttachments                        = color_attachment;
+    blendInfo.pAttachments                        = colorAttachment;
 
-    VkDynamicState dynamic_states[2]               = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-    VkPipelineDynamicStateCreateInfo dynamic_state = {};
-    dynamic_state.sType                            = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic_state.dynamicStateCount                = static_cast<I32>(ARRAYSIZE(dynamic_states));
-    dynamic_state.pDynamicStates                   = dynamic_states;
+    VkDynamicState dynamicStates[2]               = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    VkPipelineDynamicStateCreateInfo dynamicState = {};
+    dynamicState.sType                            = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount                = static_cast<I32>(ARRAYSIZE(dynamicStates));
+    dynamicState.pDynamicStates                   = dynamicStates;
 
     VkGraphicsPipelineCreateInfo info = {};
     info.sType                        = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -881,19 +992,17 @@ static void vkCreatePipeline(VkDevice logicalDevice, const VkAllocationCallbacks
     info.pMultisampleState            = &msInfo;
     info.pDepthStencilState           = &depthInfo;
     info.pColorBlendState             = &blendInfo;
-    info.pDynamicState                = &dynamic_state;
+    info.pDynamicState                = &dynamicState;
     info.layout                       = bd->pipelineLayout;
     info.renderPass                   = renderPass;
     info.subpass                      = subpass;
 
 #ifdef IMPL_VULKAN_HAS_DYNAMIC_RENDERING
-    VkPipelineRenderingCreateInfoKHR pipelineRenderingCreateInfo = {};
-    pipelineRenderingCreateInfo.sType                            = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-    pipelineRenderingCreateInfo.colorAttachmentCount             = 1;
-    pipelineRenderingCreateInfo.pColorAttachmentFormats          = &bd->vulkanInitInfo.colorAttachmentFormat;
     if (bd->vulkanInitInfo.useDynamicRendering)
     {
-        info.pNext      = &pipelineRenderingCreateInfo;
+        SAF_ASSERT(bd->vulkanInitInfo.pipelineRenderingCreateInfo.sType == VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR && "PipelineRenderingCreateInfo sType must be VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR");
+        SAF_ASSERT(bd->vulkanInitInfo.pipelineRenderingCreateInfo.pNext == nullptr && "PipelineRenderingCreateInfo pNext must be nullptr");
+        info.pNext      = &bd->vulkanInitInfo.pipelineRenderingCreateInfo;
         info.renderPass = VK_NULL_HANDLE; // Just make sure it's actually nullptr.
     }
 #endif
@@ -908,7 +1017,7 @@ bool vkCreateDeviceObjects()
     VulkanInitInfo* v = &bd->vulkanInitInfo;
     VkResult err;
 
-    if (!bd->fontSampler)
+    if (!bd->texSampler)
     {
         // Bilinear sampling is required by default. Set 'io.Fonts->flags |= ImFontAtlasFlags_NoBakedLines' or 'style.AntiAliasedLinesUseTex = false' to allow point/nearest sampling.
         VkSamplerCreateInfo info = {};
@@ -916,13 +1025,13 @@ bool vkCreateDeviceObjects()
         info.magFilter           = VK_FILTER_LINEAR;
         info.minFilter           = VK_FILTER_LINEAR;
         info.mipmapMode          = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-        info.addressModeU        = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        info.addressModeV        = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        info.addressModeW        = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        info.addressModeU        = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        info.addressModeV        = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        info.addressModeW        = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
         info.minLod              = -1000;
         info.maxLod              = 1000;
         info.maxAnisotropy       = 1.0f;
-        err                      = vkCreateSampler(v->device, &info, v->allocator, &bd->fontSampler);
+        err                      = vkCreateSampler(v->device, &info, v->allocator, &bd->texSampler);
         checkVkResultBD(err);
     }
 
@@ -940,43 +1049,42 @@ bool vkCreateDeviceObjects()
         checkVkResultBD(err);
     }
 
+    if (v->descriptorPoolSize != 0)
+    {
+        SAF_ASSERT(v->descriptorPoolSize > 1);
+        VkDescriptorPoolSize poolSize       = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, v->descriptorPoolSize };
+        VkDescriptorPoolCreateInfo poolInfo = {};
+        poolInfo.sType                      = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.flags                      = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        poolInfo.maxSets                    = v->descriptorPoolSize;
+        poolInfo.poolSizeCount              = 1;
+        poolInfo.pPoolSizes                 = &poolSize;
+
+        err = vkCreateDescriptorPool(v->device, &poolInfo, v->allocator, &bd->descriptorPool);
+        checkVkResultBD(err);
+    }
+
     if (!bd->pipelineLayout)
     {
         // Constants: we are using 'vec2 offset' and 'vec2 scale' instead of a full 3d projection matrix
-        VkPushConstantRange push_constants[1] = {};
-        push_constants[0].stageFlags          = VK_SHADER_STAGE_VERTEX_BIT;
-        push_constants[0].offset              = sizeof(F32) * 0;
-        push_constants[0].size                = sizeof(F32) * 4;
-        VkDescriptorSetLayout set_layout[1]   = { bd->descriptorSetLayout };
+        VkPushConstantRange pushConstants[1]  = {};
+        pushConstants[0].stageFlags           = VK_SHADER_STAGE_VERTEX_BIT;
+        pushConstants[0].offset               = sizeof(F32) * 0;
+        pushConstants[0].size                 = sizeof(F32) * 4;
+        VkDescriptorSetLayout setLayout[1]    = { bd->descriptorSetLayout };
         VkPipelineLayoutCreateInfo layoutInfo = {};
         layoutInfo.sType                      = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layoutInfo.setLayoutCount             = 1;
-        layoutInfo.pSetLayouts                = set_layout;
+        layoutInfo.pSetLayouts                = setLayout;
         layoutInfo.pushConstantRangeCount     = 1;
-        layoutInfo.pPushConstantRanges        = push_constants;
+        layoutInfo.pPushConstantRanges        = pushConstants;
         err                                   = vkCreatePipelineLayout(v->device, &layoutInfo, v->allocator, &bd->pipelineLayout);
         checkVkResultBD(err);
     }
 
-    vkCreatePipeline(v->device, v->allocator, v->pipelineCache, bd->renderPass, v->msaaSamples, &bd->pipeline, bd->subpass);
+    vkCreatePipeline(v->device, v->allocator, v->pipelineCache, v->renderPass, v->msaaSamples, &bd->pipeline, v->subpass);
 
     return true;
-}
-
-void saf::vkDestroyImGuiFontUploadObjects()
-{
-    VulkanData* bd    = vkGetBackendData();
-    VulkanInitInfo* v = &bd->vulkanInitInfo;
-    if (bd->uploadBuffer)
-    {
-        vkDestroyBuffer(v->device, bd->uploadBuffer, v->allocator);
-        bd->uploadBuffer = VK_NULL_HANDLE;
-    }
-    if (bd->uploadBufferMemory)
-    {
-        vkFreeMemory(v->device, bd->uploadBufferMemory, v->allocator);
-        bd->uploadBufferMemory = VK_NULL_HANDLE;
-    }
 }
 
 void vkDestroyDeviceObjects()
@@ -984,8 +1092,23 @@ void vkDestroyDeviceObjects()
     VulkanData* bd    = vkGetBackendData();
     VulkanInitInfo* v = &bd->vulkanInitInfo;
     vkDestroyAllViewportsRenderBuffers(v->device, v->allocator);
-    vkDestroyImGuiFontUploadObjects();
+    vkDestroyImGuiFontsTexture();
 
+    if (bd->texCommandBuffer)
+    {
+        vkFreeCommandBuffers(v->device, bd->texCommandPool, 1, &bd->texCommandBuffer);
+        bd->texCommandBuffer = VK_NULL_HANDLE;
+    }
+    if (bd->texCommandPool)
+    {
+        vkDestroyCommandPool(v->device, bd->texCommandPool, v->allocator);
+        bd->texCommandPool = VK_NULL_HANDLE;
+    }
+    if (bd->texSampler)
+    {
+        vkDestroySampler(v->device, bd->texSampler, v->allocator);
+        bd->texSampler = VK_NULL_HANDLE;
+    }
     if (bd->shaderModuleVert)
     {
         vkDestroyShaderModule(v->device, bd->shaderModuleVert, v->allocator);
@@ -995,26 +1118,6 @@ void vkDestroyDeviceObjects()
     {
         vkDestroyShaderModule(v->device, bd->shaderModuleFrag, v->allocator);
         bd->shaderModuleFrag = VK_NULL_HANDLE;
-    }
-    if (bd->fontView)
-    {
-        vkDestroyImageView(v->device, bd->fontView, v->allocator);
-        bd->fontView = VK_NULL_HANDLE;
-    }
-    if (bd->fontImage)
-    {
-        vkDestroyImage(v->device, bd->fontImage, v->allocator);
-        bd->fontImage = VK_NULL_HANDLE;
-    }
-    if (bd->fontMemory)
-    {
-        vkFreeMemory(v->device, bd->fontMemory, v->allocator);
-        bd->fontMemory = VK_NULL_HANDLE;
-    }
-    if (bd->fontSampler)
-    {
-        vkDestroySampler(v->device, bd->fontSampler, v->allocator);
-        bd->fontSampler = VK_NULL_HANDLE;
     }
     if (bd->descriptorSetLayout)
     {
@@ -1030,6 +1133,16 @@ void vkDestroyDeviceObjects()
     {
         vkDestroyPipeline(v->device, bd->pipeline, v->allocator);
         bd->pipeline = VK_NULL_HANDLE;
+    }
+    if (bd->pipelineForViewports)
+    {
+        vkDestroyPipeline(v->device, bd->pipelineForViewports, v->allocator);
+        bd->pipelineForViewports = VK_NULL_HANDLE;
+    }
+    if (bd->descriptorPool)
+    {
+        vkDestroyDescriptorPool(v->device, bd->descriptorPool, v->allocator);
+        bd->descriptorPool = VK_NULL_HANDLE;
     }
 }
 
@@ -1061,7 +1174,7 @@ bool saf::vkLoadFunctions(PFN_vkVoidFunction (*loaderFunc)(const char* functionN
     return true;
 }
 
-bool saf::vkInit(VulkanInitInfo* info, VkRenderPass render_pass)
+bool saf::vkInit(VulkanInitInfo* info)
 {
     SAF_ASSERT(gFunctionsLoaded && "Need to call VulkanLoadFunctions() if IMPL_VULKAN_NO_PROTOTYPES or VK_NO_PROTOTYPES are set!");
 
@@ -1093,15 +1206,16 @@ bool saf::vkInit(VulkanInitInfo* info, VkRenderPass render_pass)
     SAF_ASSERT(info->physicalDevice != VK_NULL_HANDLE);
     SAF_ASSERT(info->device != VK_NULL_HANDLE);
     SAF_ASSERT(info->queue != VK_NULL_HANDLE);
-    SAF_ASSERT(info->descriptorPool != VK_NULL_HANDLE);
+    if (info->descriptorPool != VK_NULL_HANDLE) // Either DescriptorPool or DescriptorPoolSize must be set, not both!
+        SAF_ASSERT(info->descriptorPoolSize == 0);
+    else
+        SAF_ASSERT(info->descriptorPoolSize > 0);
     SAF_ASSERT(info->minImageCount >= 2);
     SAF_ASSERT(info->imageCount >= info->minImageCount);
     if (info->useDynamicRendering == false)
-        SAF_ASSERT(render_pass != VK_NULL_HANDLE);
+        SAF_ASSERT(info->renderPass != VK_NULL_HANDLE);
 
     bd->vulkanInitInfo = *info;
-    bd->renderPass     = render_pass;
-    bd->subpass        = info->subpass;
 
     vkCreateDeviceObjects();
 
@@ -1109,8 +1223,7 @@ bool saf::vkInit(VulkanInitInfo* info, VkRenderPass render_pass)
     ImGuiViewport* mainViewport    = ImGui::GetMainViewport();
     mainViewport->RendererUserData = IM_NEW(VulkanViewportData)();
 
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-        vkInitPlatformInterface();
+    vkInitMultiViewportSupport();
 
     return true;
 }
@@ -1133,7 +1246,7 @@ void saf::vkShutdown()
     mainViewport->RendererUserData = nullptr;
 
     // Clean up windows
-    vkShutdownPlatformInterface();
+    vkShutdownMultiViewportSupport();
 
     io.BackendRendererName     = nullptr;
     io.BackendRendererUserData = nullptr;
@@ -1145,7 +1258,9 @@ void saf::vkNewFrame()
 {
     VulkanData* bd = vkGetBackendData();
     SAF_ASSERT(bd != nullptr && "Did you call VulkanInit()?");
-    IM_UNUSED(bd);
+
+    if (!bd->fontTexture.descriptorSet)
+        vkCreateImGuiFontsTexture();
 }
 
 void saf::vkSetMinImageCount(U32 minImageCount)
@@ -1170,15 +1285,16 @@ void saf::vkSetMinImageCount(U32 minImageCount)
 // FIXME: This is experimental in the sense that we are unsure how to best design/tackle this problem, please post to https://github.com/ocornut/imgui/pull/914 if you have suggestions.
 VkDescriptorSet saf::vkAddTexture(VkSampler sampler, VkImageView imageView, VkImageLayout imageLayout)
 {
-    VulkanData* bd    = vkGetBackendData();
-    VulkanInitInfo* v = &bd->vulkanInitInfo;
+    VulkanData* bd        = vkGetBackendData();
+    VulkanInitInfo* v     = &bd->vulkanInitInfo;
+    VkDescriptorPool pool = bd->descriptorPool ? bd->descriptorPool : v->descriptorPool;
 
     // Create Descriptor Set:
     VkDescriptorSet descriptorSet;
     {
         VkDescriptorSetAllocateInfo allocInfo = {};
         allocInfo.sType                       = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocInfo.descriptorPool              = v->descriptorPool;
+        allocInfo.descriptorPool              = pool;
         allocInfo.descriptorSetCount          = 1;
         allocInfo.pSetLayouts                 = &bd->descriptorSetLayout;
         VkResult err                          = vkAllocateDescriptorSets(v->device, &allocInfo, &descriptorSet);
@@ -1204,9 +1320,11 @@ VkDescriptorSet saf::vkAddTexture(VkSampler sampler, VkImageView imageView, VkIm
 
 void saf::vkRemoveTexture(VkDescriptorSet descriptorSet)
 {
-    VulkanData* bd    = vkGetBackendData();
-    VulkanInitInfo* v = &bd->vulkanInitInfo;
-    vkFreeDescriptorSets(v->device, v->descriptorPool, 1, &descriptorSet);
+    VulkanData* bd        = vkGetBackendData();
+    VulkanInitInfo* v     = &bd->vulkanInitInfo;
+    VkDescriptorPool pool = bd->descriptorPool ? bd->descriptorPool : v->descriptorPool;
+
+    vkFreeDescriptorSets(v->device, pool, 1, &descriptorSet);
 }
 
 //-------------------------------------------------------------------------
@@ -1260,10 +1378,10 @@ VkSurfaceFormatKHR saf::vkSelectSurfaceFormat(VkPhysicalDevice physicalDevice, V
     else
     {
         // Request several formats, the first found will be used
-        for (I32 request_i = 0; request_i < requestedFormatsCount; request_i++)
-            for (U32 avail_i = 0; avail_i < availableCount; avail_i++)
-                if (availableFormats[avail_i].format == requestedFormats[request_i] && availableFormats[avail_i].colorSpace == requestedColorSpace)
-                    return availableFormats[avail_i];
+        for (I32 requestI = 0; requestI < requestedFormatsCount; requestI++)
+            for (U32 availI = 0; availI < availableCount; availI++)
+                if (availableFormats[availI].format == requestedFormats[requestI] && availableFormats[availI].colorSpace == requestedColorSpace)
+                    return availableFormats[availI];
 
         // If none of the requested image formats could be found, use the first available
         return availableFormats[0];
@@ -1293,11 +1411,52 @@ VkPresentModeKHR saf::vkSelectPresentMode(VkPhysicalDevice physicalDevice, VkSur
     return VK_PRESENT_MODE_FIFO_KHR; // Always available
 }
 
+VkPhysicalDevice saf::vkSelectPhysicalDevice(VkInstance instance)
+{
+    U32 gpuCount;
+    VkResult err = vkEnumeratePhysicalDevices(instance, &gpuCount, nullptr);
+    checkVkResultBD(err);
+    SAF_ASSERT(gpuCount > 0);
+
+    ImVector<VkPhysicalDevice> gpus;
+    gpus.resize(gpuCount);
+    err = vkEnumeratePhysicalDevices(instance, &gpuCount, gpus.Data);
+    checkVkResultBD(err);
+
+    // If a number >1 of GPUs got reported, find discrete GPU if present, or use first one available. This covers
+    // most common cases (multi-gpu/integrated+dedicated graphics). Handling more complicated setups (multiple
+    // dedicated GPUs) is out of scope of this sample.
+    for (VkPhysicalDevice& device : gpus)
+    {
+        VkPhysicalDeviceProperties properties;
+        vkGetPhysicalDeviceProperties(device, &properties);
+        if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+            return device;
+    }
+
+    // Use first GPU (Integrated) is a Discrete one is not available.
+    if (gpuCount > 0)
+        return gpus[0];
+    return VK_NULL_HANDLE;
+}
+
+U32 saf::vkSelectQueueFamilyIndex(VkPhysicalDevice physicalDevice)
+{
+    U32 count;
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &count, nullptr);
+    ImVector<VkQueueFamilyProperties> queuesProperties;
+    queuesProperties.resize((I32)count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &count, queuesProperties.Data);
+    for (U32 i = 0; i < count; i++)
+        if (queuesProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            return i;
+    return (U32)-1;
+}
+
 void vkCreateContextCommandBuffers(VkPhysicalDevice physicalDevice, VkDevice logicalDevice, VulkanContext* context, U32 queueFamily, const VkAllocationCallbacks* allocator)
 {
     SAF_ASSERT(physicalDevice != VK_NULL_HANDLE && logicalDevice != VK_NULL_HANDLE);
-    (void)physicalDevice;
-    (void)allocator;
+    IM_UNUSED(physicalDevice);
 
     // Create Command Buffers
     VkResult err;
@@ -1342,8 +1501,8 @@ void vkCreateContextCommandBuffers(VkPhysicalDevice physicalDevice, VkDevice log
             checkVkResultBD(err);
         }
     }
-    // ressource
 
+    // resource
     {
         VkCommandPoolCreateInfo info = {};
         info.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -1396,11 +1555,19 @@ void vkCreateContextSwapChain(VkPhysicalDevice physicalDevice, VkDevice logicalD
         vkDestroyFrameSemaphores(logicalDevice, &context->frameSemaphores[i], allocator);
     }
 
-    IM_FREE(context->frames);
-    IM_FREE(context->frameSemaphores);
-    context->frames          = nullptr;
-    context->frameSemaphores = nullptr;
-    context->framesInFlight  = 0;
+    context->frames.clear();
+    context->frameSemaphores.clear();
+    context->framesInFlight = 0;
+
+    if (context->renderPass)
+    {
+        vkDestroyRenderPass(logicalDevice, context->renderPass, allocator);
+    }
+
+    if (minImageCount == 0)
+    {
+        minImageCount = vkGetMinImageCountFromPresentMode(context->presentMode);
+    }
 
     // Destroy Ressource Command*
     if (context->ressourceCommandBuffer)
@@ -1411,23 +1578,12 @@ void vkCreateContextSwapChain(VkPhysicalDevice physicalDevice, VkDevice logicalD
         context->ressourceCommandPool   = VK_NULL_HANDLE;
     }
 
-    if (context->renderPass)
-    {
-        vkDestroyRenderPass(logicalDevice, context->renderPass, allocator);
-    }
-    if (context->pipeline)
-    {
-        vkDestroyPipeline(logicalDevice, context->pipeline, allocator);
-    }
-
-    // If min image count was not specified, request different count of images dependent on selected present mode
-    if (minImageCount == 0)
-    {
-        minImageCount = vkGetMinImageCountFromPresentMode(context->presentMode);
-    }
-
     // Create Swapchain
     {
+        VkSurfaceCapabilitiesKHR cap;
+        err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, context->surface, &cap);
+        checkVkResultBD(err);
+
         VkSwapchainCreateInfoKHR info = {};
         info.sType                    = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         info.surface                  = context->surface;
@@ -1437,14 +1593,12 @@ void vkCreateContextSwapChain(VkPhysicalDevice physicalDevice, VkDevice logicalD
         info.imageArrayLayers         = 1;
         info.imageUsage               = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         info.imageSharingMode         = VK_SHARING_MODE_EXCLUSIVE; // Assume that graphics family == present family
-        info.preTransform             = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+        info.preTransform             = (cap.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : cap.currentTransform;
         info.compositeAlpha           = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         info.presentMode              = context->presentMode;
         info.clipped                  = VK_TRUE;
         info.oldSwapchain             = oldSwapchain;
-        VkSurfaceCapabilitiesKHR cap;
-        err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, context->surface, &cap);
-        checkVkResultBD(err);
+
         if (info.minImageCount < cap.minImageCount)
         {
             info.minImageCount = cap.minImageCount;
@@ -1473,13 +1627,12 @@ void vkCreateContextSwapChain(VkPhysicalDevice physicalDevice, VkDevice logicalD
         SAF_ASSERT(context->framesInFlight < ARRAYSIZE(backbuffers));
         err = vkGetSwapchainImagesKHR(logicalDevice, context->swapchain, &context->framesInFlight, backbuffers);
         checkVkResultBD(err);
-        context->semaphoreCount = context->framesInFlight + 1;
 
-        SAF_ASSERT(context->frames == nullptr && context->frameSemaphores == nullptr);
-        context->frames          = static_cast<VulkanFrameData*>(IM_ALLOC(sizeof(VulkanFrameData) * context->framesInFlight));
-        context->frameSemaphores = static_cast<VulkanFrameSemaphores*>(IM_ALLOC(sizeof(VulkanFrameSemaphores) * context->semaphoreCount));
-        memset(context->frames, 0, sizeof(context->frames[0]) * context->framesInFlight);
-        memset(context->frameSemaphores, 0, sizeof(context->frameSemaphores[0]) * context->semaphoreCount);
+        context->semaphoreCount = context->framesInFlight + 1;
+        context->frames.resize(context->framesInFlight);
+        context->frameSemaphores.resize(context->semaphoreCount);
+        memset(context->frames.Data, 0, context->frames.size_in_bytes());
+        memset(context->frameSemaphores.Data, 0, context->frameSemaphores.size_in_bytes());
         for (U32 i = 0; i < context->framesInFlight; i++)
         {
             context->frames[i].backbuffer = backbuffers[i];
@@ -1493,57 +1646,57 @@ void vkCreateContextSwapChain(VkPhysicalDevice physicalDevice, VkDevice logicalD
     // Create the Render Pass
     if (context->useDynamicRendering == false)
     {
-        VkAttachmentDescription attachment     = {};
-        attachment.format                      = context->surfaceFormat.format;
-        attachment.samples                     = VK_SAMPLE_COUNT_1_BIT;
-        attachment.loadOp                      = context->clearEnable ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachment.storeOp                     = VK_ATTACHMENT_STORE_OP_STORE;
-        attachment.stencilLoadOp               = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachment.stencilStoreOp              = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachment.initialLayout               = VK_IMAGE_LAYOUT_UNDEFINED;
-        attachment.finalLayout                 = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        VkAttachmentReference color_attachment = {};
-        color_attachment.attachment            = 0;
-        color_attachment.layout                = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        VkSubpassDescription subpass           = {};
-        subpass.pipelineBindPoint              = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount           = 1;
-        subpass.pColorAttachments              = &color_attachment;
-        VkSubpassDependency dependency         = {};
-        dependency.srcSubpass                  = VK_SUBPASS_EXTERNAL;
-        dependency.dstSubpass                  = 0;
-        dependency.srcStageMask                = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.dstStageMask                = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.srcAccessMask               = 0;
-        dependency.dstAccessMask               = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        VkRenderPassCreateInfo info            = {};
-        info.sType                             = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        info.attachmentCount                   = 1;
-        info.pAttachments                      = &attachment;
-        info.subpassCount                      = 1;
-        info.pSubpasses                        = &subpass;
-        info.dependencyCount                   = 1;
-        info.pDependencies                     = &dependency;
-        err                                    = vkCreateRenderPass(logicalDevice, &info, allocator, &context->renderPass);
+        VkAttachmentDescription attachment    = {};
+        attachment.format                     = context->surfaceFormat.format;
+        attachment.samples                    = VK_SAMPLE_COUNT_1_BIT;
+        attachment.loadOp                     = context->clearEnable ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachment.storeOp                    = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.stencilLoadOp              = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachment.stencilStoreOp             = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachment.initialLayout              = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachment.finalLayout                = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        VkAttachmentReference colorAttachment = {};
+        colorAttachment.attachment            = 0;
+        colorAttachment.layout                = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        VkSubpassDescription subpass          = {};
+        subpass.pipelineBindPoint             = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount          = 1;
+        subpass.pColorAttachments             = &colorAttachment;
+        VkSubpassDependency dependency        = {};
+        dependency.srcSubpass                 = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass                 = 0;
+        dependency.srcStageMask               = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstStageMask               = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask              = 0;
+        dependency.dstAccessMask              = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        VkRenderPassCreateInfo info           = {};
+        info.sType                            = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        info.attachmentCount                  = 1;
+        info.pAttachments                     = &attachment;
+        info.subpassCount                     = 1;
+        info.pSubpasses                       = &subpass;
+        info.dependencyCount                  = 1;
+        info.pDependencies                    = &dependency;
+        err                                   = vkCreateRenderPass(logicalDevice, &info, allocator, &context->renderPass);
         checkVkResultBD(err);
 
         // We do not create a pipeline by default as this is also used by examples' main.cpp,
         // but secondary viewport in multi-viewport mode may want to create one with:
-        // vkCreatePipeline(logicalDevice, allocator, VK_NULL_HANDLE, context->renderPass, VK_SAMPLE_COUNT_1_BIT, &context->pipeline, bd->subpass);
+        // vkCreatePipeline(logicalDevice, allocator, VK_NULL_HANDLE, context->renderPass, VK_SAMPLE_COUNT_1_BIT, &context->pipeline, v->subpass);
     }
 
     // Create The Image Views
     {
-        VkImageViewCreateInfo info          = {};
-        info.sType                          = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        info.viewType                       = VK_IMAGE_VIEW_TYPE_2D;
-        info.format                         = context->surfaceFormat.format;
-        info.components.r                   = VK_COMPONENT_SWIZZLE_R;
-        info.components.g                   = VK_COMPONENT_SWIZZLE_G;
-        info.components.b                   = VK_COMPONENT_SWIZZLE_B;
-        info.components.a                   = VK_COMPONENT_SWIZZLE_A;
-        VkImageSubresourceRange image_range = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-        info.subresourceRange               = image_range;
+        VkImageViewCreateInfo info         = {};
+        info.sType                         = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        info.viewType                      = VK_IMAGE_VIEW_TYPE_2D;
+        info.format                        = context->surfaceFormat.format;
+        info.components.r                  = VK_COMPONENT_SWIZZLE_R;
+        info.components.g                  = VK_COMPONENT_SWIZZLE_G;
+        info.components.b                  = VK_COMPONENT_SWIZZLE_B;
+        info.components.a                  = VK_COMPONENT_SWIZZLE_A;
+        VkImageSubresourceRange imageRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+        info.subresourceRange              = imageRange;
         for (U32 i = 0; i < context->framesInFlight; i++)
         {
             VulkanFrameData* fd = &context->frames[i];
@@ -1600,10 +1753,8 @@ void saf::vkDestroyContext(VkInstance instance, VkDevice logicalDevice, VulkanCo
         vkDestroyFrameSemaphores(logicalDevice, &context->frameSemaphores[i], allocator);
     }
 
-    IM_FREE(context->frames);
-    IM_FREE(context->frameSemaphores);
-    context->frames          = nullptr;
-    context->frameSemaphores = nullptr;
+    context->frames.clear();
+    context->frameSemaphores.clear();
 
     // Destroy Ressource Command*
     if (context->ressourceCommandBuffer)
@@ -1614,7 +1765,6 @@ void saf::vkDestroyContext(VkInstance instance, VkDevice logicalDevice, VulkanCo
         context->ressourceCommandPool   = VK_NULL_HANDLE;
     }
 
-    vkDestroyPipeline(logicalDevice, context->pipeline, allocator);
     vkDestroyRenderPass(logicalDevice, context->renderPass, allocator);
     vkDestroySwapchainKHR(logicalDevice, context->swapchain, allocator);
     vkDestroySurfaceKHR(instance, context->surface, allocator);
@@ -1674,10 +1824,9 @@ void vkDestroyContextRenderBuffers(VkDevice logicalDevice, VulkanContextRenderBu
     {
         vkDestroyFrameRenderBuffers(logicalDevice, &buffers->frameRenderBuffers[n], allocator);
     }
-    IM_FREE(buffers->frameRenderBuffers);
-    buffers->frameRenderBuffers = nullptr;
-    buffers->index              = 0;
-    buffers->count              = 0;
+    buffers->frameRenderBuffers.clear();
+    buffers->index = 0;
+    buffers->count = 0;
 }
 
 void vkDestroyAllViewportsRenderBuffers(VkDevice logicalDevice, const VkAllocationCallbacks* allocator)
@@ -1721,11 +1870,20 @@ static void vkCreateImGuiViewportContext(ImGuiViewport* viewport)
     }
 
     // Select Surface Format
-    const VkFormat requestSurfaceImageFormat[]     = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
+    ImVector<VkFormat> requestSurfaceImageFormats;
+#ifdef IMGUI_IMPL_VULKAN_HAS_DYNAMIC_RENDERING
+    for (U32 n = 0; n < v->pipelineRenderingCreateInfo.colorAttachmentCount; n++)
+        requestSurfaceImageFormats.push_back(v->pipelineRenderingCreateInfo.pColorAttachmentFormats[n]);
+#endif
+    const VkFormat defaultFormats[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
+    for (VkFormat format : defaultFormats)
+        requestSurfaceImageFormats.push_back(format);
+
     const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-    context->surfaceFormat                         = vkSelectSurfaceFormat(v->physicalDevice, context->surface, requestSurfaceImageFormat, static_cast<PtrSize>(ARRAYSIZE(requestSurfaceImageFormat)), requestSurfaceColorSpace);
+    context->surfaceFormat                         = vkSelectSurfaceFormat(v->physicalDevice, context->surface, requestSurfaceImageFormats.Data, (size_t)requestSurfaceImageFormats.Size, requestSurfaceColorSpace);
 
     // Select Present Mode
+    // FIXME-VULKAN: Even thought mailbox seems to get us maximum framerate with a single window, it halves framerate with a second window etc. (w/ Nvidia and SDK 1.82.1)
     VkPresentModeKHR presentModes[] = { VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_FIFO_KHR };
     context->presentMode            = vkSelectPresentMode(v->physicalDevice, context->surface, &presentModes[0], ARRAYSIZE(presentModes));
 
@@ -1734,6 +1892,10 @@ static void vkCreateImGuiViewportContext(ImGuiViewport* viewport)
     context->useDynamicRendering = v->useDynamicRendering;
     vkCreateOrResizeContext(v->instance, v->physicalDevice, v->device, context, v->queueFamily, v->allocator, static_cast<I32>(viewport->Size.x), static_cast<I32>(viewport->Size.y), v->minImageCount);
     vd->contextOwned = true;
+
+    // Create pipeline (shared by all secondary viewports)
+    if (bd->pipelineForViewports == VK_NULL_HANDLE)
+        vkCreatePipeline(v->device, v->allocator, VK_NULL_HANDLE, context->renderPass, VK_SAMPLE_COUNT_1_BIT, &bd->pipelineForViewports, 0);
 }
 
 static void vkDestroyImGuiViewportContext(ImGuiViewport* viewport)
@@ -1772,15 +1934,33 @@ static void vkRenderImGuiViewportContext(ImGuiViewport* viewport, void*)
     VulkanInitInfo* v      = &bd->vulkanInitInfo;
     VkResult err;
 
+    if (vd->swapChainNeedRebuild || vd->swapChainSuboptimal)
+    {
+        vkCreateOrResizeContext(v->instance, v->physicalDevice, v->device, context, v->queueFamily, v->allocator, static_cast<I32>(viewport->Size.x), static_cast<I32>(viewport->Size.y), v->minImageCount);
+        vd->swapChainNeedRebuild = vd->swapChainSuboptimal = false;
+    }
+
     VulkanFrameData* fd        = &context->frames[context->frameIndex];
     VulkanFrameSemaphores* fsd = &context->frameSemaphores[context->semaphoreIndex];
     {
         {
             err = vkAcquireNextImageKHR(v->device, context->swapchain, UINT64_MAX, fsd->imageAcquiredSemaphore, VK_NULL_HANDLE, &context->frameIndex);
-            checkVkResultBD(err);
+            if (err == VK_ERROR_OUT_OF_DATE_KHR)
+            {
+                vd->swapChainNeedRebuild = true; // Since we are not going to swap this frame anyway, it's ok that recreation happens on next frame.
+                return;
+            }
+            if (err == VK_SUBOPTIMAL_KHR)
+            {
+                vd->swapChainSuboptimal = true;
+            }
+            else
+            {
+                checkVkResultBD(err);
+            }
             fd = &context->frames[context->frameIndex];
         }
-        while (1)
+        for (;;)
         {
             err = vkWaitForFences(v->device, 1, &fd->fence, VK_TRUE, 100);
             if (err == VK_SUCCESS)
@@ -1852,7 +2032,7 @@ static void vkRenderImGuiViewportContext(ImGuiViewport* viewport, void*)
         }
     }
 
-    vkRenderImGuiDrawData(viewport->DrawData, fd->commandBuffer, context->pipeline);
+    vkRenderImGuiDrawData(viewport->DrawData, fd->commandBuffer, bd->pipelineForViewports);
 
     {
 #ifdef IMPL_VULKAN_HAS_DYNAMIC_RENDERING
@@ -1906,6 +2086,9 @@ static void vkSwapImGuiViewportBuffers(ImGuiViewport* viewport, void*)
     VulkanContext* context = &vd->context;
     VulkanInitInfo* v      = &bd->vulkanInitInfo;
 
+    if (vd->swapChainNeedRebuild) // Frame data became invalid in the middle of rendering
+        return;
+
     VkResult err;
     U32 presentIndex = context->frameIndex;
 
@@ -1918,20 +2101,24 @@ static void vkSwapImGuiViewportBuffers(ImGuiViewport* viewport, void*)
     info.pSwapchains           = &context->swapchain;
     info.pImageIndices         = &presentIndex;
     err                        = vkQueuePresentKHR(v->queue, &info);
-    if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR)
+    if (err == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        vkCreateOrResizeContext(v->instance, v->physicalDevice, v->device, &vd->context, v->queueFamily, v->allocator, static_cast<I32>(viewport->Size.x), static_cast<I32>(viewport->Size.y), v->minImageCount);
+        vd->swapChainNeedRebuild = true;
+        return;
+    }
+    if (err == VK_SUBOPTIMAL_KHR)
+    {
+        vd->swapChainSuboptimal = true;
     }
     else
     {
         checkVkResultBD(err);
     }
 
-    context->frameIndex     = (context->frameIndex + 1) % context->framesInFlight;     // This is for the next vkWaitForFences()
     context->semaphoreIndex = (context->semaphoreIndex + 1) % context->semaphoreCount; // Now we can use the next set of semaphores
 }
 
-void vkInitPlatformInterface()
+void vkInitMultiViewportSupport()
 {
     ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
@@ -1943,7 +2130,7 @@ void vkInitPlatformInterface()
     platformIO.Renderer_SwapBuffers   = vkSwapImGuiViewportBuffers;
 }
 
-void vkShutdownPlatformInterface()
+void vkShutdownMultiViewportSupport()
 {
     ImGui::DestroyPlatformWindows();
 }

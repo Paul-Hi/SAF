@@ -2,7 +2,7 @@
  * @file      layer.hpp
  * @author    Paul Himmler
  * @version   0.01
- * @date      2024
+ * @date      2025
  * @copyright Apache License 2.0
  */
 
@@ -24,7 +24,7 @@
 #endif
 
 struct GLFWwindow;
-struct ImGui_ImplVulkanH_Window;
+struct VulkanWindow;
 
 namespace saf
 {

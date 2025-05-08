@@ -9,7 +9,7 @@ namespace saf
         Test()
             : mInteger("Integer Member", 10, -1, 1024)
             , mSize("Size", IVec3(0, 0, 0), -10, 10)
-            , mPoint("Point", Vec3(0.0, 0.0, 0.0), -36.0, 36.0)
+            , mPoint("Point", Vec3(0.0, 0.0, 0.0), -36.0, 36.0, "%.4f")
         {
         }
 

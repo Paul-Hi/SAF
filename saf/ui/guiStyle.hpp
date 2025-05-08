@@ -2,7 +2,7 @@
  * @file      guiStyle.hpp
  * @author    Paul Himmler
  * @version   0.01
- * @date      2024
+ * @date      2025
  * @copyright Apache License 2.0
  */
 
@@ -65,9 +65,9 @@ namespace saf
         colors[ImGuiCol_ResizeGripActive]      = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
         colors[ImGuiCol_Tab]                   = ImVec4(0.0784313753247261f, 0.08627451211214066f, 0.1019607856869698f, 1.0f);
         colors[ImGuiCol_TabHovered]            = ImVec4(0.1176470592617989f, 0.1333333402872086f, 0.1490196138620377f, 1.0f);
-        colors[ImGuiCol_TabActive]             = ImVec4(0.1176470592617989f, 0.1333333402872086f, 0.1490196138620377f, 1.0f);
-        colors[ImGuiCol_TabUnfocused]          = ImVec4(0.0784313753247261f, 0.08627451211214066f, 0.1019607856869698f, 1.0f);
-        colors[ImGuiCol_TabUnfocusedActive]    = ImVec4(0.125490203499794f, 0.2745098173618317f, 0.572549045085907f, 1.0f);
+        colors[ImGuiCol_TabSelected]           = ImVec4(0.1176470592617989f, 0.1333333402872086f, 0.1490196138620377f, 1.0f);
+        colors[ImGuiCol_TabDimmed]             = ImVec4(0.0784313753247261f, 0.08627451211214066f, 0.1019607856869698f, 1.0f);
+        colors[ImGuiCol_TabDimmedSelected]     = ImVec4(0.125490203499794f, 0.2745098173618317f, 0.572549045085907f, 1.0f);
         colors[ImGuiCol_DockingPreview]        = ImVec4(0.9372549057006836f, 0.9372549057006836f, 0.9372549057006836f, 1.0f);
         colors[ImGuiCol_DockingEmptyBg]        = ImVec4(0.09411764889955521f, 0.1019607856869698f, 0.1176470592617989f, 1.0f);
         colors[ImGuiCol_PlotLines]             = ImVec4(0.5215686559677124f, 0.6000000238418579f, 0.7019608020782471f, 1.0f);
@@ -119,7 +119,7 @@ namespace saf
         style.ButtonTextAlign           = ImVec2(0.5f, 0.5f);
         style.SelectableTextAlign       = ImVec2(0.0f, 0.0f);
 
-        style.DockingSeparatorSize     = 1.0f;
+        style.DockingSeparatorSize = 1.0f;
     }
 
 } // namespace saf
