@@ -96,7 +96,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     implot
     GIT_REPOSITORY https://github.com/epezent/implot
-    GIT_TAG 47522f47054d33178e7defa780042bd2a06b09f9
+    GIT_TAG 3da8bd34299965d3b0ab124df743fe3e076fa222
     GIT_SHALLOW ON
     GIT_PROGRESS ON
 )
@@ -105,7 +105,7 @@ FetchContent_Declare(
 FetchContent_Declare(
     implot3d
     GIT_REPOSITORY https://github.com/brenocq/implot3d.git
-    GIT_TAG 69ee9218bec6b4e53cd87233ff908397f4bb8b47
+    GIT_TAG v0.2
     GIT_SHALLOW ON
     GIT_PROGRESS ON
 )

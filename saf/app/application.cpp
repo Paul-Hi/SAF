@@ -395,9 +395,9 @@ static void cleanupVulkanWindow()
 }
 
 #ifdef SAF_CUDA_INTEROP
-static void frameRender(VulkanContext* context, ImDrawData* draw_data, bool firstFrame, const std::unordered_map<VkImage, ApplicationContext::ImageSemaphores>& imageSemaphores)
+static void frameRender(VulkanContext* context, ImDrawData* drawData, bool firstFrame, const std::unordered_map<VkImage, ApplicationContext::ImageSemaphores>& imageSemaphores)
 #else
-static void frameRender(VulkanContext* context, ImDrawData* draw_data)
+static void frameRender(VulkanContext* context, ImDrawData* drawData)
 #endif
 {
     VkResult err;
@@ -689,7 +689,9 @@ void Application::run()
     bool firstFrame = true;
     while (!glfwWindowShouldClose(mWindow) && mRunning)
     {
-        if (gSwapChainRebuild)
+        I32 width, height;
+        glfwGetFramebufferSize(mWindow, &width, &height);
+        if (width > 0 && height > 0 && (gSwapChainRebuild || gVulkanContext.width != width || gVulkanContext.height != height))
         {
             if (width > 0 && height > 0)
             {

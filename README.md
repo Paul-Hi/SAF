@@ -3,6 +3,7 @@
 A Simple Application Framework with Vulkan and ImGui to quickly and easily create C/C++ applications with a graphical user interface.
 
 ## Use
+
 After checking out the repository, CMake should automatically set up all dependencies except the Vulkan SDK.
 
 ## Dependencies
