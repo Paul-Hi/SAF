@@ -30,7 +30,7 @@ public:
             "TestScript",
             Application::stringToPath("./examples/scripts/test.lua"), [this](sol::state& state)
             { state.open_libraries(sol::lib::math); state["seed"] = &mSeed; state["update"] = [this] { this->updateLayer(); }; },
-            [](sol::state&) {}, [](const Str& msg)
+            [](sol::state&){}, [](const Str& msg)
             { UILog::get().println("[Script] %s", msg.c_str()); });
 #endif
     }
@@ -109,13 +109,13 @@ public:
         }
 
         // Some 3D surface data - similar to the 3D surface demo of ImPlot3D
-        constexpr I32 N = 20;
+        constexpr I32 N = 40;
         static F32 xs[N * N], ys[N * N], zs[N * N];
         static F32 t = 0.0f;
         t += ImGui::GetIO().DeltaTime;
 
-        constexpr F32 minVal = -1.0f;
-        constexpr F32 maxVal = 1.0f;
+        constexpr F32 minVal = -10.0f;
+        constexpr F32 maxVal = 10.0f;
         constexpr F32 step   = (maxVal - minVal) / (N - 1);
 
         for (I32 i = 0; i < N; i++)
@@ -123,9 +123,9 @@ public:
             for (I32 j = 0; j < N; j++)
             {
                 I32 idx = i * N + j;
-                xs[idx] = minVal + j * step;                                          // X values are constant along rows
-                ys[idx] = minVal + i * step;                                          // Y values are constant along columns
-                zs[idx] = sin(2 * t + sqrt((xs[idx] * xs[idx] + ys[idx] * ys[idx]))); // z = sin(2t + sqrt(x^2 + y^2))
+                xs[idx] = minVal + j * step; // X values are constant along rows
+                ys[idx] = minVal + i * step; // Y values are constant along columns
+                zs[idx] = 0.5f * sin(-4 * t + sqrt((xs[idx] * xs[idx] + ys[idx] * ys[idx])));
             }
         }
 
@@ -134,7 +134,7 @@ public:
         ImPlot3D::PushColormap("Viridis");
         if (ImPlot3D::BeginPlot("##SurfacePlot", ImVec2(350, 350), ImPlot3DFlags_NoClip))
         {
-            ImPlot3D::SetupAxesLimits(-1, 1, -1, 1, -1.5, 1.5);
+            ImPlot3D::SetupAxesLimits(-10, 10, -10, 10, -1.5, 1.5);
             ImPlot3D::PushStyleVar(ImPlot3DStyleVar_FillAlpha, 0.8f);
             ImPlot3D::SetNextLineStyle(ImPlot3D::GetColormapColor(1));
 

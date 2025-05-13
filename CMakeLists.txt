@@ -66,8 +66,8 @@ message(STATUS "Fetching Dependencies.")
 # dependencies
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/")
 include(FetchContent)
-set(FETCHCONTENT_QUIET TRUE)
 set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE ALWAYS)
+set(FETCHCONTENT_QUIET TRUE)
 
 # Vulkan
 find_package(Vulkan REQUIRED)
@@ -77,175 +77,30 @@ if(SAF_ENABLE_CUDA_INTEROP)
     enable_language(CUDA)
 endif()
 
-cmake_language(GET_MESSAGE_LOG_LEVEL CMAKE_MESSAGE_LOG_LEVEL_BACKUP)
-set(CMAKE_MESSAGE_LOG_LEVEL ERROR)
-set(FETCHCONTENT_QUIET ON)
-
-# imgui
-FetchContent_Declare(
-    imgui
-    GIT_REPOSITORY https://github.com/ocornut/imgui
-    GIT_TAG v1.91.8-docking
-    GIT_SHALLOW ON
-    GIT_PROGRESS ON
-)
-
-# implot
-FetchContent_Declare(
-    implot
-    GIT_REPOSITORY https://github.com/epezent/implot
-    GIT_TAG 3da8bd34299965d3b0ab124df743fe3e076fa222
-    GIT_SHALLOW ON
-    GIT_PROGRESS ON
-)
-
-# implot3d
-FetchContent_Declare(
-    implot3d
-    GIT_REPOSITORY https://github.com/brenocq/implot3d.git
-    GIT_TAG v0.2
-    GIT_SHALLOW ON
-    GIT_PROGRESS ON
-)
-
-# ImGuiFileDialog
-FetchContent_Declare(
-    imfile
-    GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
-    GIT_TAG v0.6.7
-    GIT_SHALLOW ON
-    GIT_PROGRESS ON
-)
-
 # Eigen
-FetchContent_Declare(eigen
-    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-    GIT_TAG 3.4.0
-    GIT_SHALLOW ON
-    GIT_PROGRESS ON
-    GIT_VERBOSE ON
-)
+include(eigen3)
 
 # glfw
-FetchContent_Declare(
-    glfw
-    GIT_REPOSITORY https://github.com/glfw/glfw
-    GIT_TAG 3.4
-    GIT_SHALLOW ON
-    GIT_PROGRESS ON
-)
+include(glfw)
 
-FetchContent_MakeAvailable(imgui implot implot3d eigen glfw)
-FetchContent_Populate(imfile)
+# imgui and more
+include(imgui)
 
-# pybind11
-# FetchContent_Declare(
-# pybind11
-# GIT_REPOSITORY https://github.com/pybind/pybind11
-# GIT_TAG v2.11.1
-# )
-# set(PYBIND11_FINDPYTHON CACHE INTERNAL false)
-# set(PYBIND11_INSTALL CACHE INTERNAL false)
-# set(PYBIND11_INTERNALS_VERSION CACHE INTERNAL "")
-# set(PYBIND11_NOPYTHON CACHE INTERNAL false)
-# set(PYBIND11_PYTHON_VERSION CACHE INTERNAL "")
-# set(PYBIND11_TEST CACHE INTERNAL false)
-# set(pybind11_DIR CACHE INTERNAL "")
 if(SAF_ENABLE_SCRIPTING)
-    # ----- Lua -----
-    FetchContent_Declare(lua
-        GIT_REPOSITORY https://github.com/lua/lua.git
-        GIT_TAG v5.4.7
-        GIT_SHALLOW ON
-        GIT_PROGRESS ON
-    )
-    FetchContent_GetProperties(lua)
-
-    if(NOT cpputest_POPULATED)
-        FetchContent_Populate(lua)
-    endif()
-
-    # ----- Sol2 -----
-    FetchContent_Declare(sol2
-        GIT_REPOSITORY https://github.com/ThePhD/sol2.git
-        GIT_TAG v3.3.0
-        GIT_SHALLOW ON
-        GIT_PROGRESS ON
-    )
-    FetchContent_MakeAvailable(sol2)
+    # lua and sol2
+    include(lua)
+    include(sol2)
 endif()
 
 if(SAF_ENABLE_FILE_WATCH)
-    # ----- efsw -----
-    FetchContent_Declare(efsw
-        GIT_REPOSITORY https://github.com/SpartanJ/efsw
-        GIT_TAG 1.4.1
-        GIT_SHALLOW ON
-        GIT_PROGRESS ON
-    )
-    set(VERBOSE OFF)
-    FetchContent_MakeAvailable(efsw)
-endif()
-
-set(GLFW_BUILD_EXAMPLES OFF CACHE INTERNAL "Build the GLFW example programs")
-set(GLFW_BUILD_TESTS OFF CACHE INTERNAL "Build the GLFW test programs")
-set(GLFW_BUILD_DOCS OFF CACHE INTERNAL "Build the GLFW documentation")
-set(GLFW_INSTALL OFF CACHE INTERNAL "Generate installation target")
-message(STATUS "Added glfw in: " ${glfw_SOURCE_DIR})
-set(glfw_INCLUDE_DIRS ${glfw_SOURCE_DIR}/include)
-
-add_library(imgui STATIC
-    ${imgui_SOURCE_DIR}/imgui.cpp
-    ${imgui_SOURCE_DIR}/imgui_demo.cpp
-    ${imgui_SOURCE_DIR}/imgui_draw.cpp
-    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/imgui_tables.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
-    ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
-    ${implot_SOURCE_DIR}/implot.cpp
-    ${implot_SOURCE_DIR}/implot_demo.cpp
-    ${implot_SOURCE_DIR}/implot_items.cpp
-    ${implot3d_SOURCE_DIR}/implot3d.cpp
-    ${implot3d_SOURCE_DIR}/implot3d_demo.cpp
-    ${implot3d_SOURCE_DIR}/implot3d_items.cpp
-    ${implot3d_SOURCE_DIR}/implot3d_meshes.cpp
-
-    ${imfile_SOURCE_DIR}/ImGuiFileDialog.cpp
-)
-target_include_directories(imgui PUBLIC . ${glfw_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS} ${imgui_SOURCE_DIR} ${implot_SOURCE_DIR} ${implot3d_SOURCE_DIR} ${imfile_SOURCE_DIR})
-target_link_directories(imgui PRIVATE ${CMAKE_BINARY_DIR})
-target_link_libraries(imgui PUBLIC glfw Vulkan::Vulkan)
-
-set(CMAKE_MESSAGE_LOG_LEVEL ${CMAKE_MESSAGE_LOG_LEVEL_BACKUP})
-message(STATUS "Added dear imgui in: " ${imgui_SOURCE_DIR})
-message(STATUS "Added implot in: " ${implot_SOURCE_DIR})
-message(STATUS "Added implot3d in: " ${implot3d_SOURCE_DIR})
-
-unset(BUILD_TESTING CACHE)
-message(STATUS "Added Eigen in: " ${eigen_SOURCE_DIR})
-
-if(SAF_ENABLE_SCRIPTING)
-    file(GLOB_RECURSE LUA_SOURCES "${lua_SOURCE_DIR}/*.c")
-    file(GLOB_RECURSE LUA_HEADER "${lua_SOURCE_DIR}/*.h")
-
-    add_library(lua STATIC ${LUA_SOURCES} ${LUA_HEADER})
-    target_include_directories(lua PUBLIC ${lua_SOURCE_DIR})
-    add_library(lua::lua ALIAS lua)
-    message(STATUS "Added Lua in: " ${lua_SOURCE_DIR})
-
-    message(STATUS "Added Sol2 in: " ${sol2_SOURCE_DIR})
-endif()
-
-if(SAF_ENABLE_FILE_WATCH)
-    add_library(efsw::efsw ALIAS efsw)
-    message(STATUS "Added efsw in: " ${efsw_SOURCE_DIR})
+    # efsw
+    include(efsw)
 endif()
 
 if(SAF_BUILD_DOC)
     find_package(Doxygen REQUIRED dot)
 
     if(DOXYGEN_FOUND)
-        message(STATUS "Found Doxygen!")
         add_subdirectory(doc)
     else()
         message(WARNING "Doxygen not found, documentation will not be build. Please Install Doxygen to build the documentation!")
@@ -258,8 +113,6 @@ set(SAF_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/saf)
 
 add_subdirectory(saf)
 
-# add_subdirectory(pysaf)
 add_subdirectory(examples)
 
-message(STATUS "Done!")
 message(STATUS "================================================")

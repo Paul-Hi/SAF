@@ -15,14 +15,14 @@ add_library(saf
 target_link_libraries(saf
     PUBLIC
     Vulkan::Vulkan
-    Eigen3::Eigen
-    imgui
+    saf::eigen3
+    saf::imgui
     $<$<BOOL:${OpenMP_CXX_FOUND}>:OpenMP::OpenMP_CXX>
-    $<$<BOOL:${SAF_ENABLE_SCRIPTING}>:lua::lua>
-    $<$<BOOL:${SAF_ENABLE_FILE_WATCH}>:efsw::efsw>
+    $<$<BOOL:${SAF_ENABLE_SCRIPTING}>:saf::lua>
+    $<$<BOOL:${SAF_ENABLE_FILE_WATCH}>:saf::efsw>
     $<$<BOOL:${SAF_ENABLE_CUDA_INTEROP}>:${CUDA_LIBRARIES}>
     PRIVATE
-    glfw
+    saf::glfw
 )
 
 target_include_directories(saf
