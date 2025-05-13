@@ -11,7 +11,7 @@ if(NOT imgui_POPULATED)
     FetchContent_Declare(
         imgui
         GIT_REPOSITORY https://github.com/ocornut/imgui
-        GIT_TAG v1.91.8-docking
+        GIT_TAG v1.91.9b-docking
         GIT_SHALLOW TRUE
     )
     FetchContent_Populate(imgui)
