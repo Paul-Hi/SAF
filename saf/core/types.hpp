@@ -80,17 +80,17 @@ namespace saf
     /** @brief Typedef for one byte. */
     using Byte = unsigned char;
     /** @brief Typedef for 16 bit integers. */
-    using I16 = short int;
+    using I16 = int16_t;
     /** @brief Typedef for 32 bit integers. */
-    using I32 = int;
+    using I32 = int32_t;
     /** @brief Typedef for 64 bit integers. */
-    using I64 = long long;
+    using I64 = int64_t;
     /** @brief Typedef for 16 bit unsigned integers. */
-    using U16 = unsigned short int;
+    using U16 = uint16_t;
     /** @brief Typedef for 32 bit unsigned integers. */
-    using U32 = unsigned int;
+    using U32 = uint32_t;
     /** @brief Typedef for 64 bit unsigned integers. */
-    using U64 = unsigned long long;
+    using U64 = uint64_t;
     /** @brief Typedef for size_t. */
     using PtrSize = std::size_t;
 
