@@ -29,89 +29,23 @@ using namespace saf;
 #ifndef SAF_CUDA_INTEROP
 Image::Image(const std::shared_ptr<ApplicationContext>& applicationContext, U32 width, U32 height, VkFormat format, const void* data)
     : mApplicationContext(applicationContext)
-    , mWidth(width)
-    , mHeight(height)
+    , mWidth(0)
+    , mHeight(0)
     , mFormat(format)
     , mStagingBuffer(nullptr)
 {
-    VkImageCreateInfo imageCreateInfo{};
-    imageCreateInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageCreateInfo.imageType     = VK_IMAGE_TYPE_2D;
-    imageCreateInfo.extent        = { width, height, 1 };
-    imageCreateInfo.mipLevels     = 1;
-    imageCreateInfo.arrayLayers   = 1;
-    imageCreateInfo.format        = format;
-    imageCreateInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
-    imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageCreateInfo.usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    imageCreateInfo.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
-    imageCreateInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
-    imageCreateInfo.flags         = 0;
-
-    VkResult err = vkCreateImage(applicationContext->mDeviceRef, &imageCreateInfo, nullptr, &mImage);
-    checkVkResult(err);
-
-    allocateMemory(applicationContext->mPhysicalDeviceRef, applicationContext->mDeviceRef, applicationContext->mQueueRef, applicationContext->mCommandPoolRef, applicationContext->mCommandBufferRef);
-
     update(width, height, format, data);
 }
 #else
 Image::Image(const std::shared_ptr<ApplicationContext>& applicationContext, U32 width, U32 height, VkFormat format, const void* data, bool shareWithCuda)
     : mApplicationContext(applicationContext)
-    , mWidth(width)
-    , mHeight(height)
+    , mWidth(0)
+    , mHeight(0)
     , mFormat(format)
     , mStagingBuffer(nullptr)
     , mShareWithCuda(shareWithCuda)
 {
-    VkImageCreateInfo imageCreateInfo{};
-    imageCreateInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageCreateInfo.imageType     = VK_IMAGE_TYPE_2D;
-    imageCreateInfo.extent        = { width, height, 1 };
-    imageCreateInfo.mipLevels     = 1;
-    imageCreateInfo.arrayLayers   = 1;
-    imageCreateInfo.format        = format;
-    imageCreateInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
-    imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageCreateInfo.usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    imageCreateInfo.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
-    imageCreateInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
-    imageCreateInfo.flags         = 0;
-
-    VkExternalMemoryImageCreateInfo externalMemImageCreateInfo{};
-    if (shareWithCuda)
-    {
-        externalMemImageCreateInfo.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
-#ifdef WIN32
-        externalMemImageCreateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
-#else
-        externalMemImageCreateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR;
-#endif
-        imageCreateInfo.pNext = &externalMemImageCreateInfo;
-    }
-
-    VkResult err = vkCreateImage(applicationContext->mDeviceRef, &imageCreateInfo, nullptr, &mImage);
-    checkVkResult(err);
-
-    allocateMemory(applicationContext->mPhysicalDeviceRef, applicationContext->mDeviceRef, applicationContext->mQueueRef, applicationContext->mCommandPoolRef, applicationContext->mCommandBufferRef);
-
     update(width, height, format, data);
-
-    // CUDA interop stuff
-    if (shareWithCuda)
-    {
-        getKhrExtensions();
-        createSyncSemaphores();
-
-        ApplicationContext::ImageSemaphores imageSemaphores;
-
-        imageSemaphores.vkUpdateCudaSemaphore             = getVkUpdateCudaSemaphore();
-        imageSemaphores.cudaUpdateVkSemaphore             = getCudaUpdateVkSemaphore();
-        imageSemaphores.cudaExternalVkUpdateCudaSemaphore = getCudaExternalVkUpdateCudaSemaphore();
-        imageSemaphores.cudaExternalCudaUpdateVkSemaphore = getCudaExternalCudaUpdateVkSemaphore();
-
-        applicationContext->registerImage(mImage, imageSemaphores);
-    }
 }
 #endif
 
@@ -193,12 +127,27 @@ void Image::update(U32 width, U32 height, VkFormat format, const void* data)
         imageCreateInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
         imageCreateInfo.flags         = 0;
 
+        VkExternalMemoryImageCreateInfo externalMemImageCreateInfo{};
+        if (mShareWithCuda)
+        {
+            externalMemImageCreateInfo.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+#ifdef WIN32
+            externalMemImageCreateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+#else
+            externalMemImageCreateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR;
+#endif
+            imageCreateInfo.pNext = &externalMemImageCreateInfo;
+        }
+
         VkResult err = vkCreateImage(mApplicationContext->mDeviceRef, &imageCreateInfo, nullptr, &mImage);
         checkVkResult(err);
 
 #ifdef SAF_CUDA_INTEROP
         if (mShareWithCuda)
         {
+            getKhrExtensions();
+            createSyncSemaphores();
+
             ApplicationContext::ImageSemaphores imageSemaphores;
 
             imageSemaphores.vkUpdateCudaSemaphore             = getVkUpdateCudaSemaphore();
