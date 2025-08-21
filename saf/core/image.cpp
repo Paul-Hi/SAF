@@ -127,6 +127,7 @@ void Image::update(U32 width, U32 height, VkFormat format, const void* data)
         imageCreateInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
         imageCreateInfo.flags         = 0;
 
+#ifdef SAF_CUDA_INTEROP
         VkExternalMemoryImageCreateInfo externalMemImageCreateInfo{};
         if (mShareWithCuda)
         {
@@ -138,6 +139,7 @@ void Image::update(U32 width, U32 height, VkFormat format, const void* data)
 #endif
             imageCreateInfo.pNext = &externalMemImageCreateInfo;
         }
+#endif
 
         VkResult err = vkCreateImage(mApplicationContext->mDeviceRef, &imageCreateInfo, nullptr, &mImage);
         checkVkResult(err);
