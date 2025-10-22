@@ -4,15 +4,16 @@ endif()
 
 include(FetchContent)
 
+FetchContent_Declare(
+    lua
+    GIT_REPOSITORY https://github.com/lua/lua.git
+    GIT_TAG v5.4.7
+    GIT_SHALLOW TRUE
+)
+
 FetchContent_GetProperties(lua)
 
 if(NOT lua_POPULATED)
-    FetchContent_Declare(
-        lua
-        GIT_REPOSITORY https://github.com/lua/lua.git
-        GIT_TAG v5.4.7
-        GIT_SHALLOW TRUE
-    )
     FetchContent_Populate(lua)
 endif()
 

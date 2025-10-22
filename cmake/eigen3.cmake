@@ -10,15 +10,16 @@ endif()
 
 include(FetchContent)
 
+FetchContent_Declare(
+    eigen3
+    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_TAG 3.4.0
+    GIT_SHALLOW TRUE
+)
+
 FetchContent_GetProperties(eigen3)
 
 if(NOT eigen3_POPULATED)
-    FetchContent_Declare(
-        eigen3
-        GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-        GIT_TAG 3.4.0
-        GIT_SHALLOW TRUE
-    )
     FetchContent_Populate(eigen3)
 endif()
 

@@ -11,15 +11,16 @@ endif()
 include(lua)
 include(FetchContent)
 
+FetchContent_Declare(
+    efsw
+    GIT_REPOSITORY https://github.com/SpartanJ/efsw
+    GIT_TAG 1.4.1
+    GIT_SHALLOW TRUE
+)
+
 FetchContent_GetProperties(efsw)
 
 if(NOT efsw_POPULATED)
-    FetchContent_Declare(
-        efsw
-        GIT_REPOSITORY https://github.com/SpartanJ/efsw
-        GIT_TAG 1.4.1
-        GIT_SHALLOW TRUE
-    )
     FetchContent_MakeAvailable(efsw)
 endif()
 

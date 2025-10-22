@@ -722,7 +722,7 @@ void Application::run()
 
         static ImGuiWindowFlags dockingWindowFlags;
         dockingWindowFlags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-        dockingWindowFlags |= ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
+        dockingWindowFlags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -737,10 +737,10 @@ void Application::run()
         // Menu bar
         if (mMenubarCallback)
         {
-            if (ImGui::BeginMenuBar())
+            if (ImGui::BeginMainMenuBar())
             {
                 mMenubarCallback();
-                ImGui::EndMenuBar();
+                ImGui::EndMainMenuBar();
             }
         }
 

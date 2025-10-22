@@ -81,5 +81,6 @@ install(TARGETS saf DESTINATION lib)
 install(DIRECTORY core/include/ DESTINATION include FILES_MATCHING PATTERN "*.hpp")
 install(DIRECTORY vulkan/include/ DESTINATION include FILES_MATCHING PATTERN "*.hpp")
 install(DIRECTORY app/include/ DESTINATION include FILES_MATCHING PATTERN "*.hpp")
+install(DIRECTORY ui/include/ DESTINATION include FILES_MATCHING PATTERN "*.hpp")
 
 message(STATUS "================================================")

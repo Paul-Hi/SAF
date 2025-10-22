@@ -11,6 +11,8 @@
 #ifndef IMAGE_HPP
 #define IMAGE_HPP
 
+#include <core/types.hpp>
+
 #ifdef SAF_CUDA_INTEROP
 #include <cuda.h>
 #include <cuda_runtime.h>

@@ -4,55 +4,55 @@ endif()
 
 include(FetchContent)
 
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui
+    GIT_TAG v1.91.9b-docking
+    GIT_SHALLOW TRUE
+)
+
 FetchContent_GetProperties(imgui)
 
 if(NOT imgui_POPULATED)
-    # imgui
-    FetchContent_Declare(
-        imgui
-        GIT_REPOSITORY https://github.com/ocornut/imgui
-        GIT_TAG v1.91.9b-docking
-        GIT_SHALLOW TRUE
-    )
     FetchContent_Populate(imgui)
 endif()
+
+FetchContent_Declare(
+    implot
+    GIT_REPOSITORY https://github.com/epezent/implot
+    GIT_TAG 3da8bd34299965d3b0ab124df743fe3e076fa222
+    GIT_SHALLOW TRUE
+)
 
 FetchContent_GetProperties(implot)
 
 if(NOT implot_POPULATED)
-    # implot
-    FetchContent_Declare(
-        implot
-        GIT_REPOSITORY https://github.com/epezent/implot
-        GIT_TAG 3da8bd34299965d3b0ab124df743fe3e076fa222
-        GIT_SHALLOW TRUE
-    )
     FetchContent_Populate(implot)
 endif()
+
+FetchContent_Declare(
+    implot3d
+    GIT_REPOSITORY https://github.com/brenocq/implot3d.git
+    GIT_TAG v0.2
+    GIT_SHALLOW TRUE
+)
 
 FetchContent_GetProperties(implot3d)
 
 if(NOT implot3d_POPULATED)
-    # implot3d
-    FetchContent_Declare(
-        implot3d
-        GIT_REPOSITORY https://github.com/brenocq/implot3d.git
-        GIT_TAG v0.2
-        GIT_SHALLOW TRUE
-    )
     FetchContent_Populate(implot3d)
 endif()
+
+FetchContent_Declare(
+    imfile
+    GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
+    GIT_TAG v0.6.7
+    GIT_SHALLOW TRUE
+)
 
 FetchContent_GetProperties(imfile)
 
 if(NOT imfile_POPULATED)
-    # ImGuiFileDialog
-    FetchContent_Declare(
-        imfile
-        GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
-        GIT_TAG v0.6.7
-        GIT_SHALLOW TRUE
-    )
     FetchContent_Populate(imfile)
 endif()
 
