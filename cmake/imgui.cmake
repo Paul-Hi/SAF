@@ -21,7 +21,6 @@ FetchContent_Declare(
     implot
     GIT_REPOSITORY https://github.com/epezent/implot
     GIT_TAG 3da8bd34299965d3b0ab124df743fe3e076fa222
-    GIT_SHALLOW TRUE
 )
 
 FetchContent_GetProperties(implot)
