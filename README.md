@@ -12,6 +12,3 @@ After checking out the repository, CMake should automatically set up all depende
 - [glfw](https://github.com/glfw/glfw)
 - [ImGui](https://github.com/ocornut/imgui), [ImPlot](https://github.com/epezent/implot) , [ImPlot3d](https://github.com/brenocq/implot3d.git) and [ImGuiFileDialog](https://github.com/aiekick/ImGuiFileDialog)
 - [Eigen](https://gitlab.com/libeigen/eigen)
-- [Lua](https://github.com/lua/lua) (optional)
-- [sol2](https://github.com/ThePhD/sol2) (optional)
-- [efsw](https://github.com/SpartanJ/efsw) (optional)

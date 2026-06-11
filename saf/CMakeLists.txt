@@ -18,8 +18,6 @@ target_link_libraries(saf
     saf::eigen3
     saf::imgui
     $<$<BOOL:${OpenMP_CXX_FOUND}>:OpenMP::OpenMP_CXX>
-    $<$<BOOL:${SAF_ENABLE_SCRIPTING}>:saf::lua>
-    $<$<BOOL:${SAF_ENABLE_FILE_WATCH}>:saf::efsw>
     $<$<BOOL:${SAF_ENABLE_CUDA_INTEROP}>:${CUDA_LIBRARIES}>
     PRIVATE
     saf::glfw
@@ -28,8 +26,6 @@ target_link_libraries(saf
 target_include_directories(saf
     PUBLIC
     ${SAF_INCLUDE_DIR}
-    $<$<BOOL:${SAF_ENABLE_SCRIPTING}>:${sol2_SOURCE_DIR}/include>
-    $<$<BOOL:${SAF_ENABLE_FILE_WATCH}>:${efsw_SOURCE_DIR}/include>
     $<$<BOOL:${SAF_ENABLE_CUDA_INTEROP}>:${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}>
 )
 
@@ -54,8 +50,6 @@ target_compile_definitions(saf
     PUBLIC
     $<$<CONFIG:Debug>:SAF_DEBUG>
     $<$<CXX_COMPILER_ID:MSVC>: _CRT_SECURE_NO_WARNINGS>
-    $<$<BOOL:${SAF_ENABLE_SCRIPTING}>:SAF_SCRIPTING>
-    $<$<BOOL:${SAF_ENABLE_FILE_WATCH}>:SAF_FILE_WATCH>
     $<$<BOOL:${SAF_ENABLE_CUDA_INTEROP}>:SAF_CUDA_INTEROP>
     PRIVATE
     $<$<BOOL:${WIN32}>:WIN32>
@@ -72,7 +66,7 @@ target_compile_options(saf
 find_package(OpenMP)
 
 if(OpenMP_CXX_FOUND)
-  target_link_libraries(saf PUBLIC OpenMP::OpenMP_CXX)
+    target_link_libraries(saf PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
 add_library(saf::saf ALIAS saf)

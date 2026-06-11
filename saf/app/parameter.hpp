@@ -13,10 +13,6 @@
 
 #include <imgui.h>
 
-#ifdef SAF_SCRIPTING
-#define SOL_ALL_SAFETIES_ON 1
-#include <sol/sol.hpp>
-#endif
 namespace saf
 {
     template <typename T>
@@ -1027,10 +1023,6 @@ namespace saf
     private:
         std::vector<char> mBuf;
     };
-
-#ifdef SAF_SCRIPTING
-    void setupParametersInLuaState(sol::state& state);
-#endif
 
 } // namespace saf
 

@@ -6,7 +6,12 @@ project(SAF
     LANGUAGES CXX C
 )
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 set(CMAKE_COLOR_MAKEFILE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(UNIX AND NOT APPLE)
     set(LINUX TRUE)
@@ -22,8 +27,6 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
 option(SAF_BUILD_DOC "Build Documentation" OFF)
-option(SAF_ENABLE_SCRIPTING "Enable Lua Scripting" OFF)
-option(SAF_ENABLE_FILE_WATCH "Enable File Watching" OFF)
 option(SAF_ENABLE_CUDA_INTEROP "Enable Easy Interoperability with CUDA" OFF)
 
 set(VERSION_MAJOR 0 CACHE STRING "Project major version number.")
@@ -45,13 +48,6 @@ message(STATUS "================================================")
 message(STATUS "Version v" ${VERSION_MAJOR} "." ${VERSION_MINOR} ${VERSION_PATCH} " Licensed Apache License 2.0")
 message(STATUS "================================================")
 message(STATUS "Build Type: " ${CMAKE_BUILD_TYPE})
-
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-    message(STATUS "Setting Project Standards.")
-    set(CMAKE_CXX_STANDARD 20)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-endif()
 
 file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)
 
@@ -85,17 +81,6 @@ include(glfw)
 
 # imgui and more
 include(imgui)
-
-if(SAF_ENABLE_SCRIPTING)
-    # lua and sol2
-    include(lua)
-    include(sol2)
-endif()
-
-if(SAF_ENABLE_FILE_WATCH)
-    # efsw
-    include(efsw)
-endif()
 
 if(SAF_BUILD_DOC)
     find_package(Doxygen REQUIRED dot)

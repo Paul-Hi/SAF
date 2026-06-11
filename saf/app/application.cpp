@@ -788,25 +788,8 @@ void Application::run()
         for (auto& layer : mLayerStack)
         {
             layer->onUpdate(this, dt);
-
-#ifdef SAF_SCRIPTING
-            for (auto it = layer->mScripts.begin(); it != layer->mScripts.end(); it++)
-            {
-                layer->updateScript(it, dt);
-            }
-#endif
         }
     }
-
-#ifdef SAF_SCRIPTING
-    for (auto& layer : mLayerStack)
-    {
-        for (auto it = layer->mScripts.begin(); it != layer->mScripts.end();)
-        {
-            layer->unloadScript(it);
-        }
-    }
-#endif
 }
 
 void Application::close()
@@ -819,54 +802,3 @@ void Application::popLayer()
     mLayerStack.back()->onDetach();
     mLayerStack.pop_back();
 }
-
-#ifdef SAF_SCRIPTING
-void Application::uiRenderActiveScripts()
-{
-    if (ImGui::TreeNodeEx("Active Scripts", ImGuiTreeNodeFlags_DefaultOpen))
-    {
-        for (auto& layer : mLayerStack)
-        {
-            ImGui::PushID(ImGui::GetID(&layer));
-            for (auto it = layer->mScripts.begin(); it != layer->mScripts.end();)
-            {
-                auto& [name, script] = *it;
-                ImGui::PushID(ImGui::GetID(name.c_str()));
-                ImGui::Columns(2);
-                ImGui::BulletText("%s", name.c_str());
-                ImGui::NextColumn();
-                if (script.running && ImGui::SmallButton("Stop"))
-                {
-                    layer->stopScript(it);
-                    continue;
-                }
-                else if (!script.running)
-                {
-                    if (ImGui::SmallButton("Start"))
-                    {
-                        layer->startScript(it);
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("Reload"))
-                    {
-                        layer->reloadScript(it);
-                        continue;
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("Unload"))
-                    {
-                        layer->unloadScript(it);
-                        continue;
-                    }
-                }
-                ImGui::Columns();
-                ImGui::Separator();
-                ImGui::PopID();
-                it++;
-            }
-            ImGui::PopID();
-        }
-        ImGui::TreePop();
-    }
-}
-#endif

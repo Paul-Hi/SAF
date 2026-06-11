@@ -25,14 +25,6 @@ public:
         mImage = std::make_shared<Image>(application->getApplicationContext(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
 #endif
         mRandom.set(RandGen(mSeed));
-#if defined(SAF_SCRIPTING) && defined(SAF_FILE_WATCH)
-        loadScript(
-            "TestScript",
-            Application::stringToPath("./examples/scripts/test.lua"), [this](sol::state& state)
-            { state.open_libraries(sol::lib::math); state["seed"] = &mSeed; state["update"] = [this] { this->updateLayer(); }; },
-            [](sol::state&){}, [](const Str& msg)
-            { UILog::get().println("[Script] %s", msg.c_str()); });
-#endif
     }
 
     inline void updateLayer()
@@ -146,12 +138,6 @@ public:
         ImPlot3D::PopColormap();
 
         ImGui::End();
-
-#ifdef SAF_SCRIPTING
-        ImGui::Begin("Scripting");
-        application->uiRenderActiveScripts();
-        ImGui::End();
-#endif
 
         UILog::get().render("Log");
     }
