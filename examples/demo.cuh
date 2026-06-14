@@ -2,7 +2,6 @@
 
 #ifdef SAF_CUDA_INTEROP
 #include <core/types.hpp>
-
 #include <cuda.h>
 #include <cuda_runtime.h>
 

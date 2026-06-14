@@ -1,8 +1,8 @@
 /**
  * @file      parameter.hpp
  * @author    Paul Himmler
- * @version   0.01
- * @date      2025
+ * @version   1.00
+ * @date      2026
  * @copyright Apache License 2.0
  */
 

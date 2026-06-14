@@ -9,6 +9,7 @@ After checking out the repository, CMake should automatically set up all depende
 ## Dependencies
 
 - [Vulkan](https://www.vulkan.org)
+- [volk](https://github.com/zeux/volk)
 - [glfw](https://github.com/glfw/glfw)
 - [ImGui](https://github.com/ocornut/imgui), [ImPlot](https://github.com/epezent/implot) , [ImPlot3d](https://github.com/brenocq/implot3d.git) and [ImGuiFileDialog](https://github.com/aiekick/ImGuiFileDialog)
 - [Eigen](https://gitlab.com/libeigen/eigen)

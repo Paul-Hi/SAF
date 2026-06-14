@@ -1,15 +1,17 @@
 /**
  * @file      application.cpp
  * @author    Paul Himmler
- * @version   0.01
- * @date      2025
+ * @version   1.00
+ * @date      2026
  * @copyright Apache License 2.0
  */
 
 #include "application.hpp"
-#include <core/image.hpp>
-#include <core/immediateSubmit.hpp>
-#include <core/vulkanHelper.hpp>
+#include <GLFW/glfw3.h>
+#include <app/settings.hpp>
+#include <chrono>
+#include <core/helpers.hpp>
+#include <core/vulkanSwapchain.hpp>
 #include <implot.h>
 #include <implot3d.h>
 #include <ui/guiStyle.hpp>
@@ -20,594 +22,217 @@
 #include <cuda_runtime.h>
 #endif
 
+#ifdef WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#define NOMINMAX
+#include <VersionHelpers.h>
+#include <aclapi.h>
+#include <dxgi1_2.h>
+#include <windows.h>
+#define _USE_MATH_DEFINES
+#endif
+
 using namespace saf;
-
-// This is really similar to imgui example to simplify things
-#define UNLIMITED_FRAME_RATE
-
-#if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
-#pragma comment(lib, "legacy_stdio_definitions")
-#endif
-
-#ifdef SAF_DEBUG
-#define VULKAN_DEBUG_MESSENGER
-#endif
-
-// Data
-static VkAllocationCallbacks* gAllocator = nullptr;
-static VkInstance gInstance              = VK_NULL_HANDLE;
-static VkPhysicalDevice gPhysicalDevice  = VK_NULL_HANDLE;
-static VkDevice gDevice                  = VK_NULL_HANDLE;
-static U32 gQueueFamily                  = static_cast<U32>(-1);
-static VkQueue gQueue                    = VK_NULL_HANDLE;
-#ifdef VULKAN_DEBUG_MESSENGER
-static VkDebugUtilsMessengerEXT gDebugMessenger = VK_NULL_HANDLE;
-#endif
-static VkPipelineCache gPipelineCache   = VK_NULL_HANDLE;
-static VkDescriptorPool gDescriptorPool = VK_NULL_HANDLE;
-
-static VulkanContext gVulkanContext;
-static I32 gMinImageCount     = 2;
-static bool gSwapChainRebuild = false;
 
 static void glfwErrorCallback(I32 error, const char* description)
 {
     std::cerr << "[glfw] Error " << error << ": " << description << '\n';
 }
 
-#ifdef VULKAN_DEBUG_MESSENGER
-static VKAPI_ATTR VkBool32 VKAPI_CALL debugUtilsCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType,
-                                                         const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
-{
-    std::cerr << "[vulkan] Validation Layer: " << pCallbackData->pMessage << '\n';
-
-    (void)(messageSeverity);
-    (void)(messageType);
-    (void)(pUserData);
-
-    // Always return VK_FALSE
-    return VK_FALSE;
-}
-
-static VkDebugUtilsMessengerCreateInfoEXT gDebugUtilsCreateInfo{
-    VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-    nullptr,
-    0,
-    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT // | VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT
-    ,
-    VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-    debugUtilsCallback,
-    nullptr
-};
-#endif // VULKAN_DEBUG_MESSENGER
-
-static bool isExtensionAvailable(const ImVector<VkExtensionProperties>& properties, const char* extension)
-{
-    for (const VkExtensionProperties& p : properties)
-    {
-        if (strcmp(p.extensionName, extension) == 0)
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-#ifdef SAF_CUDA_INTEROP
-static void setupVulkanCudaInteropDevice(Byte* vkDeviceUUID)
-{
-    I32 deviceCount = 0;
-
-    cudaDeviceProp deviceProp;
-    CUDA_CHECK(cudaGetDeviceCount(&deviceCount));
-
-    if (deviceCount == 0)
-    {
-        std::cerr << "[CUDA] Error : No devices supporting CUDA.\n";
-    }
-
-    I32 currentCuDevice   = 0;
-    I32 devicesProhibited = 0;
-
-    while (currentCuDevice < deviceCount)
-    {
-        cudaGetDeviceProperties(&deviceProp, currentCuDevice);
-
-        if ((deviceProp.computeMode != cudaComputeModeProhibited))
-        {
-            int ret = std::memcmp(&deviceProp.uuid, &vkDeviceUUID, VK_UUID_SIZE);
-            if (ret == 0)
-            {
-                CUDA_CHECK(cudaSetDevice(currentCuDevice));
-                CUDA_CHECK(cudaGetDeviceProperties(&deviceProp, currentCuDevice));
-                // std::cout << "Using GPU Device " << currentCuDevice << " " << deviceProp.name << " with capability " << deviceProp.major << "." << deviceProp.minor << '\n';
-            }
-        }
-        else
-        {
-            devicesProhibited++;
-        }
-
-        currentCuDevice++;
-    }
-
-    if (devicesProhibited == deviceCount)
-    {
-        std::cerr << "[CUDA] Error : No Vulkan-CUDA Interop capable GPU found.\n";
-    }
-}
-#endif
-
-static VkPhysicalDevice selectPhysicalDevice()
-{
-    U32 gpuCount;
-    VkResult err = vkEnumeratePhysicalDevices(gInstance, &gpuCount, nullptr);
-    checkVkResult(err);
-    SAF_ASSERT(gpuCount > 0);
-
-    ImVector<VkPhysicalDevice> gpus;
-    gpus.resize(static_cast<I32>(gpuCount));
-    err = vkEnumeratePhysicalDevices(gInstance, &gpuCount, gpus.Data);
-    checkVkResult(err);
-
-    for (VkPhysicalDevice& device : gpus)
-    {
-        VkPhysicalDeviceProperties properties{};
-        vkGetPhysicalDeviceProperties(device, &properties);
-        if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-        {
-#ifdef SAF_CUDA_INTEROP
-            VkPhysicalDeviceIDProperties idProperties{};
-            idProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
-            idProperties.pNext = NULL;
-            VkPhysicalDeviceProperties2 properties2{};
-            properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-            properties2.pNext = &idProperties;
-            vkGetPhysicalDeviceProperties2(device, &properties2);
-            setupVulkanCudaInteropDevice(&(idProperties.deviceUUID[0]));
-#endif
-            return device;
-        }
-    }
-
-    // Use first GPU (Integrated) is a Discrete one is not available. -> CUDA interop obviously not available.
-    if (gpuCount > 0)
-        return gpus[0];
-    return VK_NULL_HANDLE;
-}
-
-static void setupVulkan(ImVector<const char*> instanceExtensions)
-{
-    VkResult err;
-
-    // Create Vulkan Instance
-    {
-        VkInstanceCreateInfo createInfo = {};
-        createInfo.sType                = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-
-        U32 propertiesCount;
-        ImVector<VkExtensionProperties> properties;
-        vkEnumerateInstanceExtensionProperties(nullptr, &propertiesCount, nullptr);
-        properties.resize(static_cast<I32>(propertiesCount));
-        err = vkEnumerateInstanceExtensionProperties(nullptr, &propertiesCount, properties.Data);
-        checkVkResult(err);
-
-        if (isExtensionAvailable(properties, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME))
-        {
-            instanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-        }
-#ifdef VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME
-        if (isExtensionAvailable(properties, VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME))
-        {
-            instanceExtensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-            createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-        }
-#endif
-        // Extension for CUDA Interop
-#ifdef SAF_CUDA_INTEROP
-        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME))
-        {
-            instanceExtensions.push_back(VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME);
-        }
-        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME))
-        {
-            instanceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
-        }
-        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME))
-        {
-            instanceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
-        }
-#endif
-
-        // Enabling validation layers
-#ifdef VULKAN_DEBUG_MESSENGER
-        const char* layers[]           = { "VK_LAYER_KHRONOS_validation" };
-        createInfo.enabledLayerCount   = 1;
-        createInfo.ppEnabledLayerNames = layers;
-        createInfo.pNext               = static_cast<VkDebugUtilsMessengerCreateInfoEXT*>(&gDebugUtilsCreateInfo);
-        instanceExtensions.push_back("VK_EXT_debug_utils");
-#endif
-        // Create Vulkan Instance
-        createInfo.enabledExtensionCount   = static_cast<U32>(instanceExtensions.Size);
-        createInfo.ppEnabledExtensionNames = instanceExtensions.Data;
-        err                                = vkCreateInstance(&createInfo, gAllocator, &gInstance);
-        checkVkResult(err);
-
-        // Setup the debug messenger
-#ifdef VULKAN_DEBUG_MESSENGER
-        auto vkCreateDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(gInstance, "vkCreateDebugUtilsMessengerEXT"));
-        SAF_ASSERT(vkCreateDebugUtilsMessengerEXT != nullptr);
-        err = vkCreateDebugUtilsMessengerEXT(gInstance, &gDebugUtilsCreateInfo, gAllocator, &gDebugMessenger);
-        checkVkResult(err);
-#endif
-    }
-
-    // Select Device
-    gPhysicalDevice = vkSelectPhysicalDevice(gInstance);
-
-    // Select graphics queue family
-    gQueueFamily = vkSelectQueueFamilyIndex(gPhysicalDevice);
-
-    // Create Logical Device
-    {
-        ImVector<const char*> deviceExtensions;
-        deviceExtensions.push_back("VK_KHR_swapchain");
-
-        // Enumerate extensions
-        U32 propertiesCount;
-        ImVector<VkExtensionProperties> properties;
-        vkEnumerateDeviceExtensionProperties(gPhysicalDevice, nullptr, &propertiesCount, nullptr);
-        properties.resize(static_cast<I32>(propertiesCount));
-        vkEnumerateDeviceExtensionProperties(gPhysicalDevice, nullptr, &propertiesCount, properties.Data);
-#ifdef VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
-        if (isExtensionAvailable(properties, VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME))
-        {
-            deviceExtensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
-        }
-#endif
-#ifdef SAF_CUDA_INTEROP
-        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME))
-        {
-            deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
-        }
-        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME))
-        {
-            deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME);
-        }
-        if (isExtensionAvailable(properties, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME))
-        {
-            deviceExtensions.push_back(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
-        }
-#ifdef _WIN64
-        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME))
-        {
-            deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME);
-        }
-        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME))
-        {
-            deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME);
-        }
-#else
-
-        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME))
-        {
-            deviceExtensions.push_back(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
-        }
-        if (isExtensionAvailable(properties, VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME))
-        {
-            deviceExtensions.push_back(VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME);
-        }
-#endif
-#endif
-
-        const F32 queuePriority[]            = { 1.0f };
-        VkDeviceQueueCreateInfo queueInfo[1] = {};
-        queueInfo[0].sType                   = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueInfo[0].queueFamilyIndex        = gQueueFamily;
-        queueInfo[0].queueCount              = 1;
-        queueInfo[0].pQueuePriorities        = queuePriority;
-        VkDeviceCreateInfo createInfo        = {};
-        createInfo.sType                     = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        createInfo.queueCreateInfoCount      = sizeof(queueInfo) / sizeof(queueInfo[0]);
-        createInfo.pQueueCreateInfos         = queueInfo;
-        createInfo.enabledExtensionCount     = static_cast<U32>(deviceExtensions.Size);
-        createInfo.ppEnabledExtensionNames   = deviceExtensions.Data;
-        err                                  = vkCreateDevice(gPhysicalDevice, &createInfo, gAllocator, &gDevice);
-        checkVkResult(err);
-        vkGetDeviceQueue(gDevice, gQueueFamily, 0, &gQueue);
-    }
-
-    // Create Descriptor Pool
-    {
-        VkDescriptorPoolSize poolSizes[] = {
-            { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-            { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-            { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 }
-        };
-        VkDescriptorPoolCreateInfo poolInfo = {};
-        poolInfo.sType                      = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolInfo.flags                      = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        poolInfo.maxSets                    = 1000 * ARRAYSIZE(poolSizes);
-        poolInfo.poolSizeCount              = static_cast<U32>(ARRAYSIZE(poolSizes));
-        poolInfo.pPoolSizes                 = poolSizes;
-        err                                 = vkCreateDescriptorPool(gDevice, &poolInfo, gAllocator, &gDescriptorPool);
-        checkVkResult(err);
-    }
-}
-
-static void setupVulkanWindow(VulkanContext* context, VkSurfaceKHR surface, I32 width, I32 height)
-{
-    context->surface = surface;
-
-    // Check for WSI support
-    VkBool32 res;
-    vkGetPhysicalDeviceSurfaceSupportKHR(gPhysicalDevice, gQueueFamily, context->surface, &res);
-    if (res != VK_TRUE)
-    {
-        std::cerr << "Error no WSI support on physical device 0!" << '\n';
-        exit(-1);
-    }
-
-    // Select Surface Format
-    const VkFormat requestSurfaceImageFormat[]     = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
-    const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-    context->surfaceFormat                         = vkSelectSurfaceFormat(gPhysicalDevice, context->surface, requestSurfaceImageFormat, static_cast<PtrSize>(ARRAYSIZE(requestSurfaceImageFormat)), requestSurfaceColorSpace);
-
-    // Select Present Mode
-#ifdef UNLIMITED_FRAME_RATE
-    VkPresentModeKHR presentModes[] = { VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_FIFO_KHR };
-#else
-    VkPresentModeKHR presentModes[] = { VK_PRESENT_MODE_FIFO_KHR };
-#endif
-    context->presentMode = vkSelectPresentMode(gPhysicalDevice, context->surface, &presentModes[0], ARRAYSIZE(presentModes));
-
-    // Create SwapChain, RenderPass, Framebuffer, etc.
-    SAF_ASSERT(gMinImageCount >= 2);
-    vkCreateOrResizeContext(gInstance, gPhysicalDevice, gDevice, context, gQueueFamily, gAllocator, width, height, static_cast<U32>(gMinImageCount));
-}
-
-static void cleanupVulkan()
-{
-    vkDestroyDescriptorPool(gDevice, gDescriptorPool, gAllocator);
-
-#ifdef VULKAN_DEBUG_MESSENGER
-    // Remove the debug report callback
-    auto vkDestroyDebugUtilsMessengerEXT = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(vkGetInstanceProcAddr(gInstance, "vkDestroyDebugUtilsMessengerEXT"));
-    SAF_ASSERT(vkDestroyDebugUtilsMessengerEXT != nullptr);
-    vkDestroyDebugUtilsMessengerEXT(gInstance, gDebugMessenger, gAllocator);
-#endif // VULKAN_DEBUG_MESSENGER
-
-    vkDestroyDevice(gDevice, gAllocator);
-    vkDestroyInstance(gInstance, gAllocator);
-}
-
-static void cleanupVulkanWindow()
-{
-    vkDestroyContext(gInstance, gDevice, &gVulkanContext, gAllocator);
-}
-
-#ifdef SAF_CUDA_INTEROP
-static void frameRender(VulkanContext* context, ImDrawData* drawData, bool firstFrame, const std::unordered_map<VkImage, ApplicationContext::ImageSemaphores>& imageSemaphores)
-#else
-static void frameRender(VulkanContext* context, ImDrawData* drawData)
-#endif
-{
-    VkResult err;
-
-    VkSemaphore imageAcquiredSemaphore  = context->frameSemaphores[context->semaphoreIndex].imageAcquiredSemaphore;
-    VkSemaphore renderCompleteSemaphore = context->frameSemaphores[context->semaphoreIndex].renderCompleteSemaphore;
-    err                                 = vkAcquireNextImageKHR(gDevice, context->swapchain, UINT64_MAX, imageAcquiredSemaphore, VK_NULL_HANDLE, &context->frameIndex);
-    if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR)
-    {
-        gSwapChainRebuild = true;
-    }
-    if (err == VK_ERROR_OUT_OF_DATE_KHR)
-    {
-        return;
-    }
-    if (err != VK_SUBOPTIMAL_KHR)
-    {
-        checkVkResult(err);
-    }
-
-    VulkanFrameData* fd = &context->frames[context->frameIndex];
-    {
-        err = vkWaitForFences(gDevice, 1, &fd->fence, VK_TRUE, UINT64_MAX); // wait indefinitely instead of periodically checking
-        checkVkResult(err);
-
-        err = vkResetFences(gDevice, 1, &fd->fence);
-        checkVkResult(err);
-    }
-    {
-        err = vkResetCommandPool(gDevice, fd->commandPool, 0);
-        checkVkResult(err);
-        VkCommandBufferBeginInfo info = {};
-        info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        err = vkBeginCommandBuffer(fd->commandBuffer, &info);
-        checkVkResult(err);
-    }
-    {
-        VkRenderPassBeginInfo info    = {};
-        info.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        info.renderPass               = context->renderPass;
-        info.framebuffer              = fd->framebuffer;
-        info.renderArea.extent.width  = static_cast<U32>(context->width);
-        info.renderArea.extent.height = static_cast<U32>(context->height);
-        info.clearValueCount          = 1;
-        info.pClearValues             = &context->clearValue;
-        vkCmdBeginRenderPass(fd->commandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
-    }
-
-    // Record dear imgui primitives into command buffer
-    vkRenderImGuiDrawData(drawData, fd->commandBuffer);
-
-    // Submit command buffer
-    vkCmdEndRenderPass(fd->commandBuffer);
-    {
-
-        VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        VkSubmitInfo info              = {};
-        info.sType                     = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-#ifdef SAF_CUDA_INTEROP
-        info.waitSemaphoreCount   = 1 + (!firstFrame ? imageSemaphores.size() : 0);
-        info.signalSemaphoreCount = 1 + imageSemaphores.size();
-
-        std::vector<VkSemaphore> waitSems(info.waitSemaphoreCount);     // FIXME: Possibly slow?
-        std::vector<VkSemaphore> signalSems(info.signalSemaphoreCount); // FIXME: Possibly slow?
-        I32 i           = 0;
-        waitSems[i]     = imageAcquiredSemaphore;
-        signalSems[i++] = renderCompleteSemaphore;
-
-        for (auto&& [_, v] : imageSemaphores)
-        {
-            if (!firstFrame)
-                waitSems[i] = v.cudaUpdateVkSemaphore;
-            signalSems[i++] = v.vkUpdateCudaSemaphore;
-        }
-
-        info.pWaitSemaphores    = waitSems.data();
-        info.pWaitDstStageMask  = &waitStage;
-        info.commandBufferCount = 1;
-        info.pCommandBuffers    = &fd->commandBuffer;
-        info.pSignalSemaphores  = signalSems.data();
-#else
-        info.waitSemaphoreCount   = 1;
-        info.pWaitSemaphores      = &imageAcquiredSemaphore;
-        info.pWaitDstStageMask    = &waitStage;
-        info.commandBufferCount   = 1;
-        info.pCommandBuffers      = &fd->commandBuffer;
-        info.signalSemaphoreCount = 1;
-        info.pSignalSemaphores    = &renderCompleteSemaphore;
-#endif
-
-        err = vkEndCommandBuffer(fd->commandBuffer);
-        checkVkResult(err);
-        err = vkQueueSubmit(gQueue, 1, &info, fd->fence);
-        checkVkResult(err);
-    }
-}
-
-static void framePresent(VulkanContext* context)
-{
-    if (gSwapChainRebuild)
-        return;
-    VkSemaphore renderCompleteSemaphore = context->frameSemaphores[context->semaphoreIndex].renderCompleteSemaphore;
-    VkPresentInfoKHR info               = {};
-    info.sType                          = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    info.waitSemaphoreCount             = 1;
-    info.pWaitSemaphores                = &renderCompleteSemaphore;
-    info.swapchainCount                 = 1;
-    info.pSwapchains                    = &context->swapchain;
-    info.pImageIndices                  = &context->frameIndex;
-    VkResult err                        = vkQueuePresentKHR(gQueue, &info);
-    if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR)
-    {
-        gSwapChainRebuild = true;
-    }
-    if (err == VK_ERROR_OUT_OF_DATE_KHR)
-    {
-        return;
-    }
-    if (err != VK_SUBOPTIMAL_KHR)
-    {
-        checkVkResult(err);
-    }
-    context->semaphoreIndex = (context->semaphoreIndex + 1) % context->semaphoreCount; // Now we can use the next set of semaphores
-}
-
-#ifdef SAF_CUDA_INTEROP
-void ApplicationContext::registerImage(VkImage image)
-{
-    mContextSemaphores.imageSemaphores.insert({ image, ImageSemaphores() });
-}
-
-void ApplicationContext::registerImage(VkImage image, const ImageSemaphores& imageSemaphores)
-{
-    mContextSemaphores.imageSemaphores.insert({ image, imageSemaphores });
-}
-
-void ApplicationContext::deregisterImage(VkImage image)
-{
-    auto it = mContextSemaphores.imageSemaphores.find(image);
-    if (it != mContextSemaphores.imageSemaphores.end())
-    {
-        mContextSemaphores.imageSemaphores.erase(image);
-    }
-}
-#endif
-
-Application::Application(const ApplicationSettings& settings)
+Application::Application(const ApplicationSettings& settings, bool loadFromPersistedSettings)
     : mName(settings.name)
     , mWindowWidth(settings.windowWidth)
     , mWindowHeight(settings.windowHeight)
-    , mFontSize(settings.fontSize)
+    , mFontScale(settings.fontScale)
+    , mTheme(settings.theme)
     , mClearColor(settings.clearColor)
+    , mVSyncEnabled(settings.vSyncEnabled)
     , mRunning(true)
 {
-    mApplicationContext = std::make_shared<ApplicationContext>();
-    initVulkanGLFW();
+    PersistentSettings persistedSettings;
+    if (loadFromPersistedSettings)
+    {
+        if (loadPersistentSettings(persistedSettings, "saf.ini"))
+        {
+            mName         = persistedSettings.name;
+            mWindowWidth  = persistedSettings.windowWidth;
+            mWindowHeight = persistedSettings.windowHeight;
+            mTheme        = persistedSettings.theme;
+            mFontScale    = persistedSettings.fontScale;
+            mClearColor   = persistedSettings.clearColor;
+            mVSyncEnabled = persistedSettings.vSyncEnabled;
+        }
+    }
 
-    mApplicationContext->mInstanceRef       = gInstance;
-    mApplicationContext->mPhysicalDeviceRef = gPhysicalDevice;
-    mApplicationContext->mDeviceRef         = gDevice;
+    storePersistentSettings(
+        { .name         = mName,
+          .windowWidth  = mWindowWidth,
+          .windowHeight = mWindowHeight,
+          .fontScale    = mFontScale,
+          .theme        = mTheme,
+          .clearColor   = mClearColor,
+          .vSyncEnabled = mVSyncEnabled },
+        "saf.ini");
 
-    mApplicationContext->mQueueRef         = gQueue;
-    mApplicationContext->mCommandPoolRef   = mVulkanContext->ressourceCommandPool;
-    mApplicationContext->mCommandBufferRef = mVulkanContext->ressourceCommandBuffer;
+    mVulkanContext   = std::make_unique<VulkanContext>();
+    mVulkanSwapchain = std::make_unique<VulkanSwapchain>();
+    init();
 }
 
 Application::~Application()
 {
-    VkResult err = vkDeviceWaitIdle(gDevice);
-    checkVkResult(err);
+    VK_CHECK(vkDeviceWaitIdle(mLogicalDevice));
 
     while (!mLayerStack.empty())
     {
         popLayer();
     }
 
-    shutdownVulkanGLFW();
+    destroy();
 }
 
-bool Application::initVulkanGLFW()
+bool Application::init()
 {
     glfwSetErrorCallback(glfwErrorCallback);
     if (!glfwInit())
-        return false;
-
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    mWindow = glfwCreateWindow(mWindowWidth, mWindowHeight, mName.c_str(), nullptr, nullptr);
-    if (!glfwVulkanSupported())
     {
-        std::cerr << "GLFW: Vulkan Not Supported" << '\n';
+        std::cerr << "[GLFW] Failed to initialize GLFW." << '\n';
         return false;
     }
 
-    ImVector<const char*> extensions;
+    if (!glfwVulkanSupported())
+    {
+        std::cerr << "[GLFW] Vulkan Not Supported." << '\n';
+        return false;
+    }
+
     U32 extensionsCount         = 0;
     const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&extensionsCount);
-    for (U32 i = 0; i < extensionsCount; i++)
-        extensions.push_back(glfwExtensions[i]);
-    setupVulkan(extensions);
+    std::vector<const char*> extensions(glfwExtensions, glfwExtensions + extensionsCount);
+
+    constexpr auto queueGCT = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
+    constexpr auto queueT   = VK_QUEUE_TRANSFER_BIT;
+    constexpr auto queueC   = VK_QUEUE_COMPUTE_BIT;
+
+    ContextCreateInfo contextCreateInfo{
+        .applicationName    = mName.c_str(),
+        .apiVersion         = API_VERSION,
+        .instanceExtensions = std::move(extensions),
+        .deviceExtensions   = {
+            { VK_KHR_SWAPCHAIN_EXTENSION_NAME, {} },
+#ifdef SAF_CUDA_INTEROP
+            { VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME, {} },
+            { VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME, {} },
+            { VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME, {} },
+#ifdef WIN32
+            { VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME, {} },
+            { VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME, {} },
+#else
+            { VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME, {} },
+            { VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME, {} },
+#endif
+#endif
+        },
+        .queues = { queueGCT, queueT, queueC }
+    };
+
+    if (mVulkanContext->create(contextCreateInfo) != VK_SUCCESS)
+    {
+        std::cerr << "[vulkan] Failed to create Vulkan context." << std::endl;
+        return false;
+    }
+
+    mInstance       = mVulkanContext->getInstance();
+    mPhysicalDevice = mVulkanContext->getPhysicalDevice();
+    mLogicalDevice  = mVulkanContext->getLogicalDevice();
+
+    mQueueGCT = mVulkanContext->getQueue(0);
+    mQueueT   = mVulkanContext->getQueue(1);
+    mQueueC   = mVulkanContext->getQueue(2);
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE); // DPI aware
+    mWindow = glfwCreateWindow(mWindowWidth, mWindowHeight, mName.c_str(), nullptr, nullptr);
+
+    if (!mWindow)
+    {
+        std::cerr << "[glfw] Failed to create GLFW window." << std::endl;
+        return false;
+    }
+
+    glfwSetWindowSize(mWindow, mWindowWidth, mWindowHeight);
 
     // Create Window Surface
-    VkSurfaceKHR surface;
-    VkResult err = glfwCreateWindowSurface(gInstance, mWindow, gAllocator, &surface);
-    checkVkResult(err);
-    // Create Framebuffers
-    I32 w, h;
-    glfwGetFramebufferSize(mWindow, &w, &h);
-    mVulkanContext = &gVulkanContext;
-    setupVulkanWindow(mVulkanContext, surface, w, h);
+    if (glfwCreateWindowSurface(mInstance, mWindow, nullptr, &mSurface) != VK_SUCCESS)
+    {
+        std::cerr << "[glfw] Failed to create window surface." << std::endl;
+        return false;
+    }
+
+    const SwapchainCreateInfo swapchainCreateInfo{
+        .logicalDevice    = mLogicalDevice,
+        .physicalDevice   = mPhysicalDevice,
+        .queue            = mQueueGCT.queue,
+        .queueFamilyIndex = mQueueGCT.familyIndex,
+        .surface          = mSurface,
+    };
+
+    if (mVulkanSwapchain->create(swapchainCreateInfo) != VK_SUCCESS)
+    {
+        std::cerr << "[vulkan] Failed to create Vulkan swapchain." << std::endl;
+        return false;
+    }
+
+    VkExtent2D swapchainExtent = { static_cast<U32>(mWindowWidth), static_cast<U32>(mWindowHeight) };
+    if (mVulkanSwapchain->update(swapchainExtent, mVSyncEnabled) != VK_SUCCESS)
+    {
+        std::cerr << "[vulkan] Failed to update swapchain." << std::endl;
+        return false;
+    }
+
+    mWindowWidth  = swapchainExtent.width;
+    mWindowHeight = swapchainExtent.height;
+
+    // Create Command Pools
+    const VkCommandPoolCreateInfo commandPoolCreateInfo{
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = mQueueGCT.familyIndex
+    };
+    if (vkCreateCommandPool(mLogicalDevice, &commandPoolCreateInfo, nullptr, &mCommandPool) != VK_SUCCESS)
+    {
+        std::cerr << "[vulkan] Failed to create command pool." << std::endl;
+        return false;
+    }
+
+    const VkCommandPoolCreateInfo transientCommandPoolCreateInfo{
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags            = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+        .queueFamilyIndex = mQueueGCT.familyIndex
+    };
+
+    if (vkCreateCommandPool(mLogicalDevice, &transientCommandPoolCreateInfo, nullptr, &mTransientCommandPool) != VK_SUCCESS)
+    {
+        std::cerr << "[vulkan] Failed to create transient command pool." << std::endl;
+        return false;
+    }
+
+    // Create Command Buffers
+    const VkCommandBufferAllocateInfo commandBufferAllocateInfo{
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool        = mCommandPool,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = mVulkanSwapchain->getFramesInFlight()
+    };
+
+    mCommandBuffers.resize(mVulkanSwapchain->getFramesInFlight());
+    if (vkAllocateCommandBuffers(mLogicalDevice, &commandBufferAllocateInfo, mCommandBuffers.data()) != VK_SUCCESS)
+    {
+        std::cerr << "[vulkan] Failed to allocate command buffer." << std::endl;
+        return false;
+    }
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -623,173 +248,415 @@ bool Application::initVulkanGLFW()
     // io.ConfigViewportsNoAutoMerge = true;
     // io.ConfigViewportsNoTaskBarIcon = true;
 
-    // Setup Dear ImGui style
-    setupImGuiStyle(mFontSize);
-
-    // When viewports are enabled we tweak WindowRounding/WindowBg so platform mWindows can look identical to regular ones.
-    ImGuiStyle& style = ImGui::GetStyle();
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-    {
-        style.WindowRounding              = 0.0f;
-        style.Colors[ImGuiCol_WindowBg].w = 1.0f;
-    }
-
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForVulkan(mWindow, true);
-    VulkanInitInfo initInfo      = {};
-    initInfo.instance            = gInstance;
-    initInfo.physicalDevice      = gPhysicalDevice;
-    initInfo.device              = gDevice;
-    initInfo.queueFamily         = gQueueFamily;
-    initInfo.queue               = gQueue;
-    initInfo.pipelineCache       = gPipelineCache;
-    initInfo.descriptorPool      = gDescriptorPool;
-    initInfo.renderPass          = mVulkanContext->renderPass;
-    initInfo.subpass             = 0;
-    initInfo.minImageCount       = static_cast<U32>(gMinImageCount);
-    initInfo.imageCount          = mVulkanContext->framesInFlight;
-    initInfo.msaaSamples         = VK_SAMPLE_COUNT_1_BIT;
-    initInfo.allocator           = gAllocator;
-    initInfo.checkVkResultFn     = checkVkResult;
-    initInfo.descriptorPoolSize  = 0;
-    initInfo.minAllocationSize   = 1024 * 1024;
-    initInfo.useDynamicRendering = false;
-    vkInit(&initInfo);
 
-    // Upload Fonts
+    const VkFormat swapChainFormat = mVulkanSwapchain->getSurfaceFormat();
+
+    const VkPipelineRenderingCreateInfo pipelineRenderingInfo{
+        .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .colorAttachmentCount    = 1,
+        .pColorAttachmentFormats = &swapChainFormat,
+    };
+
+    ImGui_ImplVulkan_InitInfo initInfo{
+        .ApiVersion         = API_VERSION,
+        .Instance           = mInstance,
+        .PhysicalDevice     = mPhysicalDevice,
+        .Device             = mLogicalDevice,
+        .QueueFamily        = mQueueGCT.familyIndex,
+        .Queue              = mQueueGCT.queue,
+        .DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE * 2,
+        .MinImageCount      = mVulkanSwapchain->getImageCount(),
+        .ImageCount         = mVulkanSwapchain->getImageCount(),
+        .PipelineInfoMain{
+            .PipelineRenderingCreateInfo = pipelineRenderingInfo },
+        .PipelineInfoForViewports{
+            .PipelineRenderingCreateInfo = pipelineRenderingInfo },
+        .UseDynamicRendering = true
+    };
+
+    ImGui_ImplVulkan_Init(&initInfo);
+
+    float xScale, yScale;
+    glfwGetWindowContentScale(mWindow, &xScale, &yScale);
+
+    // Setup Dear ImGui style
+    if (mTheme == 0)
     {
-        ImmediateSubmit::execute(gDevice, gQueue, mVulkanContext->ressourceCommandPool, mVulkanContext->ressourceCommandBuffer, [&](VkCommandBuffer cmd)
-                                 { vkCreateImGuiFontsTexture(); });
-
-        vkDestroyImGuiFontsTexture();
+        setupImGuiStyleDark(mFontScale, xScale);
     }
+    else
+    {
+        setupImGuiStyleLight(mFontScale, xScale);
+    }
+
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    style.FontScaleDpi = xScale;
 
     return true;
 }
 
-void Application::shutdownVulkanGLFW()
+void Application::destroy()
 {
-    VkResult err = vkDeviceWaitIdle(gDevice);
-    checkVkResult(err);
-    vkShutdown();
+    VK_CHECK(vkDeviceWaitIdle(mLogicalDevice));
+
+    for (const auto& image : mImages)
+    {
+        destroyImageResources(image.second);
+    }
+
+    mImages.clear();
+
+    ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImPlot3D::DestroyContext();
     ImPlot::DestroyContext();
     ImGui::DestroyContext();
 
-    cleanupVulkanWindow();
-    cleanupVulkan();
+    vkFreeCommandBuffers(mLogicalDevice, mCommandPool, static_cast<U32>(mCommandBuffers.size()), mCommandBuffers.data());
+
+    vkDestroyCommandPool(mLogicalDevice, mCommandPool, nullptr);
+    vkDestroyCommandPool(mLogicalDevice, mTransientCommandPool, nullptr);
+
+    mVulkanSwapchain->destroy();
+    vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
+    mVulkanContext->destroy();
 
     glfwDestroyWindow(mWindow);
     glfwTerminate();
 }
 
-void Application::run()
+bool Application::run()
 {
-    bool firstFrame = true;
-    while (!glfwWindowShouldClose(mWindow) && mRunning)
+    auto startTime = std::chrono::high_resolution_clock::now();
+    const bool res = [&]()
     {
-        I32 width, height;
-        glfwGetFramebufferSize(mWindow, &width, &height);
-        if (width > 0 && height > 0 && (gSwapChainRebuild || mVulkanContext->width != width || mVulkanContext->height != height))
+        const VkQueue queue = mQueueGCT.queue;
+
+        while (!glfwWindowShouldClose(mWindow) && mRunning)
         {
-            if (width > 0 && height > 0)
-            {
-                vkSetMinImageCount(static_cast<U32>(gMinImageCount));
-                vkCreateOrResizeContext(gInstance, gPhysicalDevice, gDevice, mVulkanContext, gQueueFamily, gAllocator, width, height, static_cast<U32>(gMinImageCount));
-                mVulkanContext->frameIndex             = 0;
-                mApplicationContext->mCommandPoolRef   = mVulkanContext->ressourceCommandPool;
-                mApplicationContext->mCommandBufferRef = mVulkanContext->ressourceCommandBuffer;
-                gSwapChainRebuild                      = false;
-            }
-        }
-        if (glfwGetWindowAttrib(mWindow, GLFW_ICONIFIED) != 0)
-        {
-            ImGui_ImplGlfw_Sleep(10);
-            continue;
-        }
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            F32 dt           = std::chrono::duration<F32, std::chrono::seconds::period>(currentTime - startTime).count();
+            startTime        = currentTime;
 
-        vkNewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
+            glfwPollEvents();
 
-        // Dockspace
-        ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(viewport->WorkPos);
-        ImGui::SetNextWindowSize(viewport->WorkSize);
-        ImGui::SetNextWindowViewport(viewport->ID);
-        static ImGuiDockNodeFlags dockNodeFlags = ImGuiDockNodeFlags_PassthruCentralNode;
-
-        static ImGuiWindowFlags dockingWindowFlags;
-        dockingWindowFlags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-        dockingWindowFlags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
-
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::Begin("DockSpace", nullptr, dockingWindowFlags);
-        ImGui::PopStyleVar(3);
-
-        // Real Dockspace
-        ImGuiID dockspaceId = ImGui::GetID("SAFDockSpace");
-        ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockNodeFlags);
-
-        // Menu bar
-        if (mMenubarCallback)
-        {
-            if (ImGui::BeginMainMenuBar())
-            {
-                mMenubarCallback();
-                ImGui::EndMainMenuBar();
-            }
-        }
-
-        for (auto& layer : mLayerStack)
-        {
-            layer->onUIRender(this);
-        }
-
-        ImGui::End();
-
-        ImGui::Render();
-        ImDrawData* mainDrawData                    = ImGui::GetDrawData();
-        const bool mainMinimized                    = (mainDrawData->DisplaySize.x <= 0.0f || mainDrawData->DisplaySize.y <= 0.0f);
-        mVulkanContext->clearValue.color.float32[0] = mClearColor.x() * mClearColor.w();
-        mVulkanContext->clearValue.color.float32[1] = mClearColor.y() * mClearColor.w();
-        mVulkanContext->clearValue.color.float32[2] = mClearColor.z() * mClearColor.w();
-        mVulkanContext->clearValue.color.float32[3] = mClearColor.w();
-        if (!mainMinimized)
-        {
 #ifdef SAF_CUDA_INTEROP
-            frameRender(mVulkanContext, mainDrawData, firstFrame, mApplicationContext->mContextSemaphores.imageSemaphores);
-#else
-            frameRender(mVulkanContext, mainDrawData);
+            for (const auto& image : mImages)
+            {
+                if (image.second.sharedWithCuda)
+                {
+                    // transitionImageLayout(image.second.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_NONE, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+                    waitForVulkanCompletion(image.second.cudaExternalWaitSemaphore);
+                }
+            }
 #endif
-            firstFrame = false;
+
+            for (auto& layer : mLayerStack)
+            {
+                layer->onUpdate(this, dt);
+            }
+
+#ifdef SAF_CUDA_INTEROP
+            for (const auto& image : mImages)
+            {
+                if (image.second.sharedWithCuda)
+                {
+                    signalCudaCompletion(image.second.cudaExternalSignalSemaphore);
+                    // transitionImageLayout(image.second.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                }
+            }
+#endif
+
+            I32 width, height;
+            glfwGetFramebufferSize(mWindow, &width, &height);
+
+            while (width == 0 || height == 0)
+            {
+                glfwWaitEvents();
+                glfwGetFramebufferSize(mWindow, &width, &height);
+            }
+
+            if (mWindowWidth != width || mWindowHeight != height)
+            {
+                mWindowWidth  = width;
+                mWindowHeight = height;
+                mVulkanSwapchain->requestRebuild();
+            }
+
+            if (mVulkanSwapchain->needsRebuild())
+            {
+                VkExtent2D swapchainExtent = { static_cast<U32>(mWindowWidth), static_cast<U32>(mWindowHeight) };
+                if (mVulkanSwapchain->update(swapchainExtent, mVSyncEnabled) != VK_SUCCESS)
+                {
+                    std::cerr << "[vulkan] Failed to update swapchain." << std::endl;
+                    return false;
+                }
+
+                mWindowWidth  = swapchainExtent.width;
+                mWindowHeight = swapchainExtent.height;
+
+                float xScale, yScale;
+                glfwGetWindowContentScale(mWindow, &xScale, &yScale);
+
+                if (mTheme == 0)
+                {
+                    setupImGuiStyleDark(mFontScale, xScale);
+                }
+                else
+                {
+                    setupImGuiStyleLight(mFontScale, xScale);
+                }
+
+                if (mOnResizeCallback)
+                {
+                    mOnResizeCallback(mWindowWidth, mWindowHeight);
+                }
+
+                storePersistentSettings(
+                    { .name         = mName,
+                      .windowWidth  = mWindowWidth,
+                      .windowHeight = mWindowHeight,
+                      .fontScale    = mFontScale,
+                      .theme        = mTheme,
+                      .clearColor   = mClearColor,
+                      .vSyncEnabled = mVSyncEnabled },
+                    "saf.ini");
+            }
+
+            if (glfwGetWindowAttrib(mWindow, GLFW_ICONIFIED) != 0)
+            {
+                ImGui_ImplGlfw_Sleep(10);
+                continue;
+            }
+
+            ImGui_ImplVulkan_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
+
+            const VkResult res = mVulkanSwapchain->acquire();
+
+            if (res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR)
+            {
+
+                const VkFence inFlightFence        = mVulkanSwapchain->getCurrentInFlightFence();
+                const VkSemaphore acquireSemaphore = mVulkanSwapchain->getCurrentAcquireSemaphore();
+                const VkSemaphore presentSemaphore = mVulkanSwapchain->getCurrentPresentCompleteSemaphore();
+
+                const VkCommandBuffer commandBuffer = mCommandBuffers[mVulkanSwapchain->getCurrentFrameIndex()];
+
+                VK_CHECK_RETURN_BOOL(vkResetCommandBuffer(commandBuffer, 0));
+
+                const VkCommandBufferBeginInfo beginInfo{
+                    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+                };
+
+                VK_CHECK_RETURN_BOOL(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+                // UI
+                {
+                    // Dockspace
+                    ImGuiViewport* viewport = ImGui::GetMainViewport();
+                    ImGui::SetNextWindowPos(viewport->WorkPos);
+                    ImGui::SetNextWindowSize(viewport->WorkSize);
+                    ImGui::SetNextWindowViewport(viewport->ID);
+                    static ImGuiDockNodeFlags dockNodeFlags = ImGuiDockNodeFlags_PassthruCentralNode;
+
+                    static ImGuiWindowFlags dockingWindowFlags;
+                    dockingWindowFlags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+                    dockingWindowFlags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
+
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+                    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+                    ImGui::Begin("DockSpace", nullptr, dockingWindowFlags);
+                    ImGui::PopStyleVar(3);
+
+                    // Real Dockspace
+                    ImGuiID dockspaceId = ImGui::GetID("SAFDockSpace");
+                    ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockNodeFlags);
+
+                    // Menu bar
+                    if (ImGui::BeginMainMenuBar())
+                    {
+                        if (ImGui::BeginMenu("File"))
+                        {
+                            if (ImGui::MenuItem("Exit"))
+                            {
+                                close();
+                            }
+                            ImGui::EndMenu();
+                        }
+
+                        if (ImGui::BeginMenu("View"))
+                        {
+                            float xScale, yScale;
+                            glfwGetWindowContentScale(mWindow, &xScale, &yScale);
+
+                            if (ImGui::MenuItem("Dark Theme", nullptr, mTheme == 0))
+                            {
+                                mTheme = 0;
+                                setupImGuiStyleDark(mFontScale, xScale);
+
+                                storePersistentSettings(
+                                    { .name         = mName,
+                                      .windowWidth  = mWindowWidth,
+                                      .windowHeight = mWindowHeight,
+                                      .fontScale    = mFontScale,
+                                      .theme        = mTheme,
+                                      .clearColor   = mClearColor,
+                                      .vSyncEnabled = mVSyncEnabled },
+                                    "saf.ini");
+                            }
+
+                            if (ImGui::MenuItem("Light Theme", nullptr, mTheme == 1))
+                            {
+                                mTheme = 1;
+                                setupImGuiStyleLight(mFontScale, xScale);
+
+                                storePersistentSettings(
+                                    { .name         = mName,
+                                      .windowWidth  = mWindowWidth,
+                                      .windowHeight = mWindowHeight,
+                                      .fontScale    = mFontScale,
+                                      .theme        = mTheme,
+                                      .clearColor   = mClearColor,
+                                      .vSyncEnabled = mVSyncEnabled },
+                                    "saf.ini");
+                            }
+
+                            if (ImGui::MenuItem("Toggle VSync", nullptr, mVSyncEnabled))
+                            {
+                                mVSyncEnabled = !mVSyncEnabled;
+                                mVulkanSwapchain->requestRebuild();
+
+                                storePersistentSettings(
+                                    { .name         = mName,
+                                      .windowWidth  = mWindowWidth,
+                                      .windowHeight = mWindowHeight,
+                                      .fontScale    = mFontScale,
+                                      .theme        = mTheme,
+                                      .clearColor   = mClearColor,
+                                      .vSyncEnabled = mVSyncEnabled },
+                                    "saf.ini");
+                            }
+                            ImGui::EndMenu();
+                        }
+
+                        if (mMenubarCallback)
+                        {
+                            mMenubarCallback();
+                        }
+
+                        ImGui::EndMainMenuBar();
+                    }
+
+                    for (auto& layer : mLayerStack)
+                    {
+                        layer->onUIRender(this);
+                    }
+
+                    ImGui::End();
+
+                    ImGui::Render();
+                }
+
+                // Main Draw
+                {
+
+                    const VkRenderingAttachmentInfo colorAttachment{
+                        .sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+                        .imageView   = mVulkanSwapchain->getCurrentImage().imageView,
+                        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                        .loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                        .storeOp     = VK_ATTACHMENT_STORE_OP_STORE,
+                        .clearValue  = { .color = { mClearColor.x(), mClearColor.y(), mClearColor.z(), mClearColor.w() } }
+                    };
+
+                    const VkRenderingInfo renderingInfo{
+                        .sType                = VK_STRUCTURE_TYPE_RENDERING_INFO,
+                        .renderArea           = { .offset = { 0, 0 }, .extent = { static_cast<U32>(mWindowWidth), static_cast<U32>(mWindowHeight) } },
+                        .layerCount           = 1,
+                        .viewMask             = 0,
+                        .colorAttachmentCount = 1,
+                        .pColorAttachments    = &colorAttachment,
+                    };
+
+                    transitionImageLayout(mVulkanSwapchain->getCurrentImage().image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, commandBuffer);
+
+                    vkCmdBeginRendering(commandBuffer, &renderingInfo);
+
+                    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+
+                    vkCmdEndRendering(commandBuffer);
+
+                    transitionImageLayout(mVulkanSwapchain->getCurrentImage().image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_NONE, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, commandBuffer);
+                }
+
+                VK_CHECK_RETURN_BOOL(vkEndCommandBuffer(commandBuffer));
+
+                const VkPipelineStageFlags waitStageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+#ifdef SAF_CUDA_INTEROP
+                // FIXME: Inefficient?
+                std::vector<VkSemaphore> waitSemaphores, signalSemaphores;
+                std::vector<VkPipelineStageFlags> waitStages;
+                waitSemaphores.push_back(acquireSemaphore);
+                waitStages.push_back(waitStageFlags);
+                signalSemaphores.push_back(presentSemaphore);
+
+                for (const auto& image : mImages)
+                {
+                    waitSemaphores.push_back(image.second.vkWaitSemaphore);
+                    waitStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+
+                    signalSemaphores.push_back(image.second.vkSignalSemaphore);
+                }
+
+                const VkSubmitInfo submitInfo{
+                    .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                    .waitSemaphoreCount   = static_cast<U32>(waitSemaphores.size()),
+                    .pWaitSemaphores      = waitSemaphores.data(),
+                    .pWaitDstStageMask    = waitStages.data(),
+                    .commandBufferCount   = 1,
+                    .pCommandBuffers      = &commandBuffer,
+                    .signalSemaphoreCount = static_cast<U32>(signalSemaphores.size()),
+                    .pSignalSemaphores    = signalSemaphores.data()
+                };
+#else
+                const VkSubmitInfo submitInfo{
+                    .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                    .waitSemaphoreCount   = 1,
+                    .pWaitSemaphores      = &acquireSemaphore,
+                    .pWaitDstStageMask    = &waitStageFlags,
+                    .commandBufferCount   = 1,
+                    .pCommandBuffers      = &commandBuffer,
+                    .signalSemaphoreCount = 1,
+                    .pSignalSemaphores    = &presentSemaphore
+                };
+#endif
+
+                VK_CHECK_RETURN_BOOL(vkQueueSubmit(queue, 1, &submitInfo, inFlightFence));
+
+                ImGuiIO& io = ImGui::GetIO();
+                (void)io;
+                if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+                {
+                    ImGui::UpdatePlatformWindows();
+                    ImGui::RenderPlatformWindowsDefault();
+                }
+
+                mVulkanSwapchain->present();
+            }
         }
 
-        ImGuiIO& io = ImGui::GetIO();
-        (void)io;
-        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-        {
-            ImGui::UpdatePlatformWindows();
-            ImGui::RenderPlatformWindowsDefault();
-        }
+        return true;
+    }();
 
-        if (!mainMinimized)
-        {
-            framePresent(mVulkanContext);
-        }
+    vkDeviceWaitIdle(mLogicalDevice);
 
-        glfwPollEvents();
-
-        float dt = ImGui::GetIO().DeltaTime; // FIXME: delta time...
-
-        for (auto& layer : mLayerStack)
-        {
-            layer->onUpdate(this, dt);
-        }
-    }
+    return res;
 }
 
 void Application::close()
@@ -802,3 +669,692 @@ void Application::popLayer()
     mLayerStack.back()->onDetach();
     mLayerStack.pop_back();
 }
+
+VkResult Application::executeSingleTimeCommandBuffer(const std::function<VkResult(VkCommandBuffer)>& immediateFunction)
+{
+    VkCommandBuffer commandBuffer;
+
+    const VkCommandBufferAllocateInfo commandBufferAllocateInfo{
+        .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool        = mTransientCommandPool,
+        .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1
+    };
+
+    VK_CHECK_RETURN(vkAllocateCommandBuffers(mLogicalDevice, &commandBufferAllocateInfo, &commandBuffer));
+
+    VK_CHECK_RETURN(vkResetCommandPool(mLogicalDevice, mTransientCommandPool, 0));
+
+    const VkCommandBufferBeginInfo commandBufferBeginInfo{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+
+    VK_CHECK_RETURN(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo));
+
+    immediateFunction(commandBuffer);
+
+    VK_CHECK_RETURN(vkEndCommandBuffer(commandBuffer));
+
+    const VkSubmitInfo submitInfo{
+        .sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers    = &commandBuffer
+    };
+
+    VK_CHECK_RETURN(vkQueueSubmit(mQueueGCT.queue, 1, &submitInfo, VK_NULL_HANDLE));
+    VK_CHECK_RETURN(vkQueueWaitIdle(mQueueGCT.queue));
+
+    vkFreeCommandBuffers(mLogicalDevice, mTransientCommandPool, 1, &commandBuffer);
+
+    return VK_SUCCESS;
+}
+
+VkResult Application::createImage(const VulkanImageCreateInfo& createInfo, ImageHandle& outImage)
+{
+    VulkanImage image;
+    image.width  = createInfo.width;
+    image.height = createInfo.height;
+    image.format = createInfo.format;
+    image.handle = mNextImageHandle++;
+
+    VkImageCreateInfo imageCreateInfo{
+        .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType     = VK_IMAGE_TYPE_2D,
+        .format        = createInfo.format,
+        .extent        = { createInfo.width, createInfo.height, 1 },
+        .mipLevels     = 1,
+        .arrayLayers   = 1,
+        .samples       = VK_SAMPLE_COUNT_1_BIT,
+        .tiling        = VK_IMAGE_TILING_OPTIMAL,
+        .usage         = createInfo.usage,
+        .sharingMode   = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+    };
+
+#ifdef SAF_CUDA_INTEROP
+    VkExternalMemoryImageCreateInfo externalMemoryImageCreateInfo{};
+    if (createInfo.shareWithCUDA)
+    {
+        imageCreateInfo.usage |= VK_IMAGE_USAGE_STORAGE_BIT;      // For CUDA read/write access
+        imageCreateInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // For reading back to CPU if needed
+        imageCreateInfo.flags |= VK_IMAGE_CREATE_ALIAS_BIT;       // Allow aliasing for CUDA interop
+
+#ifdef WIN32
+        externalMemoryImageCreateInfo.sType       = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+        externalMemoryImageCreateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
+#else
+        externalMemoryImageCreateInfo.sType       = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+        externalMemoryImageCreateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR;
+#endif
+        imageCreateInfo.pNext = &externalMemoryImageCreateInfo;
+    }
+#endif
+
+    VK_CHECK_RETURN(vkCreateImage(mLogicalDevice, &imageCreateInfo, nullptr, &image.image));
+
+#ifdef SAF_CUDA_INTEROP
+    // Extra semaphores
+    if (createInfo.shareWithCUDA)
+    {
+        VkSemaphoreCreateInfo semaphoreCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        };
+
+#ifdef WIN32
+        WindowsSecurityAttributes winSecurityAttributes;
+
+        VkExportSemaphoreWin32HandleInfoKHR exportSemaphoreWin32HandleInfoKHR{
+            .sType       = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
+            .pAttributes = &winSecurityAttributes,
+            .dwAccess    = DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE,
+            .name        = (LPCWSTR)NULL
+        };
+#endif
+        VkExportSemaphoreCreateInfoKHR exportSemaphoreCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO_KHR
+        };
+
+#ifdef WIN32
+        exportSemaphoreCreateInfo.pNext       = &exportSemaphoreWin32HandleInfoKHR;
+        exportSemaphoreCreateInfo.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+#else
+        exportSemaphoreCreateInfo.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT;
+#endif
+        semaphoreCreateInfo.pNext = &exportSemaphoreCreateInfo;
+
+        VK_CHECK_RETURN(vkCreateSemaphore(mLogicalDevice, &semaphoreCreateInfo, nullptr, &image.vkWaitSemaphore));
+        VK_CHECK_RETURN(vkCreateSemaphore(mLogicalDevice, &semaphoreCreateInfo, nullptr, &image.vkSignalSemaphore));
+
+        // Signal once, since we update before rendering // NOTE Only solution without Timeline Semaphores
+        VkSubmitInfo submitInfo{
+            .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .signalSemaphoreCount = 1,
+            .pSignalSemaphores    = &image.vkSignalSemaphore
+        };
+
+        VK_CHECK_RETURN(vkQueueSubmit(mQueueGCT.queue, 1, &submitInfo, VK_NULL_HANDLE));
+        VK_CHECK_RETURN(vkQueueWaitIdle(mQueueGCT.queue));
+
+        // import semaphores in CUDA
+        cudaExternalSemaphoreHandleDesc externalSemaphoreHandleDesc{};
+
+#ifdef WIN32
+        externalSemaphoreHandleDesc.type                = cudaExternalSemaphoreHandleTypeOpaqueWin32;
+        externalSemaphoreHandleDesc.handle.win32.handle = getSemaphoreHandle(image.vkWaitSemaphore);
+#else
+        externalSemaphoreHandleDesc.type      = cudaExternalSemaphoreHandleTypeOpaqueFd;
+        externalSemaphoreHandleDesc.handle.fd = static_cast<I32>(reinterpret_cast<uintptr_t>(getSemaphoreHandle(image.vkWaitSemaphore)));
+#endif
+
+        CUDA_CHECK(cudaImportExternalSemaphore(&image.cudaExternalSignalSemaphore, &externalSemaphoreHandleDesc));
+
+#ifdef WIN32
+        externalSemaphoreHandleDesc.handle.win32.handle = getSemaphoreHandle(image.vkSignalSemaphore);
+#else
+        externalSemaphoreHandleDesc.handle.fd = static_cast<I32>(reinterpret_cast<uintptr_t>(getSemaphoreHandle(image.vkSignalSemaphore)));
+#endif
+
+        CUDA_CHECK(cudaImportExternalSemaphore(&image.cudaExternalWaitSemaphore, &externalSemaphoreHandleDesc));
+    }
+#endif
+
+    VkMemoryRequirements memoryRequirements;
+    vkGetImageMemoryRequirements(mLogicalDevice, image.image, &memoryRequirements);
+
+    VkMemoryAllocateInfo memoryAllocateInfo{
+        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize  = memoryRequirements.size,
+        .memoryTypeIndex = findMemoryType(memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+    };
+
+#ifdef SAF_CUDA_INTEROP
+
+    VkExportMemoryAllocateInfo exportMemoryAllocateInfo{
+        .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO
+    };
+
+#ifdef WIN32
+    const WindowsSecurityAttributes securityAttributes{
+        .nLength        = sizeof(WindowsSecurityAttributes),
+        .bInheritHandle = TRUE
+    };
+
+    const VkExportMemoryWin32HandleInfoKHR exportMemoryWin32HandleInfo{
+        .sType       = VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
+        .pAttributes = &securityAttributes,
+        .dwAccess    = GENERIC_ALL
+    };
+#endif
+    if (createInfo.shareWithCUDA)
+    {
+#ifdef WIN32
+        exportMemoryAllocateInfo.pNext       = &exportMemoryWin32HandleInfo;
+        exportMemoryAllocateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
+#else
+        exportMemoryAllocateInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR;
+#endif
+
+        memoryAllocateInfo.pNext = &exportMemoryAllocateInfo;
+    }
+#endif
+
+    VK_CHECK_RETURN(vkAllocateMemory(mLogicalDevice, &memoryAllocateInfo, nullptr, &image.deviceMemory));
+    VK_CHECK_RETURN(vkBindImageMemory(mLogicalDevice, image.image, image.deviceMemory, 0));
+
+#ifdef SAF_CUDA_INTEROP
+    if (createInfo.shareWithCUDA)
+    {
+        cudaExternalMemoryHandleDesc handleDesc{};
+        handleDesc.size = memoryRequirements.size;
+
+#ifdef WIN32
+        handleDesc.type                = cudaExternalMemoryHandleTypeOpaqueWin32;
+        handleDesc.handle.win32.handle = getMemoryHandle(image.deviceMemory);
+#else
+        handleDesc.type      = cudaExternalMemoryHandleTypeOpaqueFd;
+        handleDesc.handle.fd = static_cast<I32>(reinterpret_cast<uintptr_t>(getMemoryHandle(image.deviceMemory)));
+#endif
+
+        CUDA_CHECK(cudaImportExternalMemory(&image.cudaExternalImageMemory, &handleDesc));
+
+        const cudaExternalMemoryMipmappedArrayDesc arrayDesc{
+            .formatDesc = getFormatDescriptor(createInfo.format),
+            .extent     = { createInfo.width, createInfo.height, 0 },
+            .flags      = cudaArraySurfaceLoadStore,
+            .numLevels  = 1
+        };
+
+        CUDA_CHECK(cudaExternalMemoryGetMappedMipmappedArray(&image.cudaMipmappedImageArray, image.cudaExternalImageMemory, &arrayDesc));
+
+        cudaArray_t cudaMipmappedLevelArray;
+        CUDA_CHECK(cudaGetMipmappedArrayLevel(&cudaMipmappedLevelArray, image.cudaMipmappedImageArray, 0));
+
+        const cudaResourceDesc surfaceResourceDesc{
+            .resType = cudaResourceTypeArray,
+            .res     = { .array{ .array = cudaMipmappedLevelArray } },
+        };
+
+        CUDA_CHECK(cudaCreateSurfaceObject(&image.cudaSurfaceObject, &surfaceResourceDesc));
+
+        const cudaResourceDesc textureResourceDesc{
+            .resType = cudaResourceTypeMipmappedArray,
+            .res     = { .mipmap{ .mipmap = image.cudaMipmappedImageArray } },
+        };
+
+        const cudaTextureDesc textureDesc{
+            .addressMode      = { cudaAddressModeWrap, cudaAddressModeWrap, cudaAddressModeWrap },
+            .filterMode       = cudaFilterModePoint,
+            .readMode         = cudaReadModeElementType,
+            .normalizedCoords = 1,
+            .mipmapFilterMode = cudaFilterModePoint
+        };
+
+        CUDA_CHECK(cudaCreateTextureObject(&image.cudaTextureObject, &textureResourceDesc, &textureDesc, nullptr));
+    }
+#endif
+
+    // Image View
+    const VkImageViewCreateInfo imageViewCreateInfo{
+        .sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image            = image.image,
+        .viewType         = VK_IMAGE_VIEW_TYPE_2D,
+        .format           = createInfo.format,
+        .components       = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY },
+        .subresourceRange = {
+            .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel   = 0,
+            .levelCount     = 1,
+            .baseArrayLayer = 0,
+            .layerCount     = 1 }
+    };
+
+    VK_CHECK_RETURN(vkCreateImageView(mLogicalDevice, &imageViewCreateInfo, nullptr, &image.imageView));
+
+    // Sampler
+    const VkSamplerCreateInfo samplerCreateInfo{
+        .sType        = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter    = VK_FILTER_LINEAR,
+        .minFilter    = VK_FILTER_LINEAR,
+        .mipmapMode   = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    };
+
+    VK_CHECK_RETURN(vkCreateSampler(mLogicalDevice, &samplerCreateInfo, nullptr, &image.sampler));
+
+    image.descriptorSet = ImGui_ImplVulkan_AddTexture(image.imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    mImages.push_back({ image.handle, image });
+    outImage = image.handle;
+
+    return VK_SUCCESS;
+}
+
+void Application::destroyImage(ImageHandle image)
+{
+    for (auto it = mImages.begin(); it != mImages.end(); ++it)
+    {
+        if (it->first == image)
+        {
+            destroyImageResources(it->second);
+            mImages.erase(it);
+            return;
+        }
+    }
+}
+
+void Application::destroyImageResources(const VulkanImage& vulkanImage)
+{
+    ImGui_ImplVulkan_RemoveTexture(vulkanImage.descriptorSet);
+
+    vkDestroySampler(mLogicalDevice, vulkanImage.sampler, nullptr);
+    vkDestroyImageView(mLogicalDevice, vulkanImage.imageView, nullptr);
+    vkDestroyImage(mLogicalDevice, vulkanImage.image, nullptr);
+    vkFreeMemory(mLogicalDevice, vulkanImage.deviceMemory, nullptr);
+
+#ifdef SAF_CUDA_INTEROP
+    if (vulkanImage.sharedWithCuda)
+    {
+        CUDA_CHECK(cudaDestroyTextureObject(vulkanImage.cudaTextureObject));
+        CUDA_CHECK(cudaDestroySurfaceObject(vulkanImage.cudaSurfaceObject));
+        CUDA_CHECK(cudaFreeMipmappedArray(vulkanImage.cudaMipmappedImageArray));
+        CUDA_CHECK(cudaDestroyExternalMemory(vulkanImage.cudaExternalImageMemory));
+
+        vkDestroySemaphore(mLogicalDevice, vulkanImage.vkWaitSemaphore, nullptr);
+        vkDestroySemaphore(mLogicalDevice, vulkanImage.vkSignalSemaphore, nullptr);
+
+        CUDA_CHECK(cudaDestroyExternalSemaphore(vulkanImage.cudaExternalWaitSemaphore));
+        CUDA_CHECK(cudaDestroyExternalSemaphore(vulkanImage.cudaExternalSignalSemaphore));
+    }
+#endif
+}
+
+VkResult Application::uploadImage(ImageHandle image, const void* data, size_t size)
+{
+    bool found = false;
+    VulkanImage vulkanImage;
+    for (const auto& img : mImages)
+    {
+        if (img.first == image)
+        {
+            vulkanImage = img.second;
+            found       = true;
+            break;
+        }
+    }
+    if (!found)
+    {
+        return VK_ERROR_UNKNOWN;
+    }
+
+    // check size of data against image size
+    const size_t imageSize = vulkanImage.width * vulkanImage.height * getFormatBytesPerPixel(vulkanImage.format);
+    if (size != imageSize)
+    {
+        return VK_ERROR_UNKNOWN;
+    }
+
+    // Create staging buffer
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+
+    const VkBufferCreateInfo bufferCreateInfo{
+        .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size        = size,
+        .usage       = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE
+    };
+
+    VK_CHECK_RETURN(vkCreateBuffer(mLogicalDevice, &bufferCreateInfo, nullptr, &stagingBuffer));
+
+    VkMemoryRequirements memoryRequirements;
+    vkGetBufferMemoryRequirements(mLogicalDevice, stagingBuffer, &memoryRequirements);
+
+    const VkMemoryAllocateInfo memoryAllocateInfo{
+        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize  = memoryRequirements.size,
+        .memoryTypeIndex = findMemoryType(memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+    };
+
+    VK_CHECK_RETURN(vkAllocateMemory(mLogicalDevice, &memoryAllocateInfo, nullptr, &stagingBufferMemory));
+    VK_CHECK_RETURN(vkBindBufferMemory(mLogicalDevice, stagingBuffer, stagingBufferMemory, 0));
+
+    // Copy data to staging buffer
+    void* mappedData;
+    VK_CHECK_RETURN(vkMapMemory(mLogicalDevice, stagingBufferMemory, 0, size, 0, &mappedData));
+    std::memcpy(mappedData, data, size);
+    vkUnmapMemory(mLogicalDevice, stagingBufferMemory);
+
+    // Copy from staging buffer to image
+
+    VK_CHECK_RETURN(executeSingleTimeCommandBuffer([&](VkCommandBuffer commandBuffer)
+                                                   {
+
+                                                       transitionImageLayout(vulkanImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, commandBuffer);
+
+                                                       const VkBufferImageCopy bufferImageCopy{
+                                                           .bufferOffset      = 0,
+                                                           .bufferRowLength   = 0,
+                                                           .bufferImageHeight = 0,
+                                                           .imageSubresource  = {
+                                                                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                                .mipLevel       = 0,
+                                                                .baseArrayLayer = 0,
+                                                                .layerCount     = 1 },
+                                                           .imageOffset = { 0, 0, 0 },
+                                                           .imageExtent = { vulkanImage.width, vulkanImage.height, 1 }
+                                                       };
+
+                                                       vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, vulkanImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
+
+                                                       transitionImageLayout(vulkanImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, commandBuffer);
+
+                                                       return VK_SUCCESS; }));
+
+    vkDestroyBuffer(mLogicalDevice, stagingBuffer, nullptr);
+    vkFreeMemory(mLogicalDevice, stagingBufferMemory, nullptr);
+
+    return VK_SUCCESS;
+}
+
+VkResult Application::downloadImage(ImageHandle image, void* data, size_t size)
+{
+    bool found = false;
+    VulkanImage vulkanImage;
+    for (const auto& img : mImages)
+    {
+        if (img.first == image)
+        {
+            vulkanImage = img.second;
+            found       = true;
+            break;
+        }
+    }
+    if (!found)
+    {
+        return VK_ERROR_UNKNOWN;
+    }
+
+    // check size of data against image size
+    const size_t imageSize = vulkanImage.width * vulkanImage.height * getFormatBytesPerPixel(vulkanImage.format);
+    if (size != imageSize)
+    {
+        return VK_ERROR_UNKNOWN;
+    }
+
+    // Create linear tiled image for copying
+    VkImage linearImage;
+    VkDeviceMemory linearImageMemory;
+
+    const VkImageCreateInfo imageCreateInfo{
+        .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType     = VK_IMAGE_TYPE_2D,
+        .format        = vulkanImage.format,
+        .extent        = { vulkanImage.width, vulkanImage.height, 1 },
+        .mipLevels     = 1,
+        .arrayLayers   = 1,
+        .samples       = VK_SAMPLE_COUNT_1_BIT,
+        .tiling        = VK_IMAGE_TILING_LINEAR,
+        .usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .sharingMode   = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+    };
+
+    VK_CHECK_RETURN(vkCreateImage(mLogicalDevice, &imageCreateInfo, nullptr, &linearImage));
+
+    VkMemoryRequirements memoryRequirements;
+    vkGetImageMemoryRequirements(mLogicalDevice, linearImage, &memoryRequirements);
+
+    const VkMemoryAllocateInfo memoryAllocateInfo{
+        .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize  = memoryRequirements.size,
+        .memoryTypeIndex = findMemoryType(memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)
+    };
+
+    VK_CHECK_RETURN(vkAllocateMemory(mLogicalDevice, &memoryAllocateInfo, nullptr, &linearImageMemory));
+    VK_CHECK_RETURN(vkBindImageMemory(mLogicalDevice, linearImage, linearImageMemory, 0));
+
+    // Copy from image to linear image
+    VK_CHECK_RETURN(executeSingleTimeCommandBuffer([&](VkCommandBuffer commandBuffer)
+                                                   {
+                                                       transitionImageLayout(vulkanImage.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, commandBuffer);
+                                                       transitionImageLayout(linearImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, commandBuffer);
+
+                                                       const VkImageCopy imageCopy{
+                                                           .srcSubresource = {
+                                                               .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+                                                               .mipLevel       = 0,
+                                                               .baseArrayLayer = 0,
+                                                               .layerCount     = 1 },
+                                                           .srcOffset      = { 0, 0, 0 },
+                                                           .dstSubresource = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1 },
+                                                           .dstOffset      = { 0, 0, 0 },
+                                                           .extent         = { vulkanImage.width, vulkanImage.height, 1 }
+                                                       };
+
+                                                       vkCmdCopyImage(commandBuffer, vulkanImage.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, linearImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageCopy);
+
+                                                       transitionImageLayout(linearImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_HOST_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, commandBuffer);
+                                                       transitionImageLayout(vulkanImage.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, commandBuffer);
+
+                                                       return VK_SUCCESS; }));
+
+    const VkImageSubresource subresource{ .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .arrayLayer = 0 };
+    VkSubresourceLayout layout;
+    vkGetImageSubresourceLayout(mLogicalDevice, linearImage, &subresource, &layout);
+
+    void* mappedData;
+    VK_CHECK_RETURN(vkMapMemory(mLogicalDevice, linearImageMemory, 0, VK_WHOLE_SIZE, 0, &mappedData));
+
+    mappedData += layout.offset * sizeof(Byte);
+    std::memcpy(data, mappedData, size);
+    vkUnmapMemory(mLogicalDevice, linearImageMemory);
+
+    vkFreeMemory(mLogicalDevice, linearImageMemory, nullptr);
+    vkDestroyImage(mLogicalDevice, linearImage, nullptr);
+
+    return VK_SUCCESS;
+}
+
+#ifdef SAF_CUDA_INTEROP
+void Application::waitForVulkanCompletion(cudaExternalSemaphore_t semaphore, cudaStream_t stream)
+{
+    cudaExternalSemaphoreWaitParams externalSemaphoreWaitParams{};
+
+    CUDA_CHECK(cudaWaitExternalSemaphoresAsync(&semaphore, &externalSemaphoreWaitParams, 1, stream));
+}
+
+void Application::signalCudaCompletion(cudaExternalSemaphore_t semaphore, cudaStream_t stream)
+{
+    cudaExternalSemaphoreSignalParams externalSemaphoreSignalParams{};
+
+    CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&semaphore, &externalSemaphoreSignalParams, 1, stream));
+}
+#endif
+
+U32 Application::findMemoryType(U32 memoryTypeBits, VkMemoryPropertyFlags propertyFlags)
+{
+    VkPhysicalDeviceMemoryProperties memoryProperties;
+    vkGetPhysicalDeviceMemoryProperties(mPhysicalDevice, &memoryProperties);
+
+    for (U32 i = 0; i < memoryProperties.memoryTypeCount; i++)
+    {
+        if ((memoryTypeBits & (1 << i)) &&
+            (memoryProperties.memoryTypes[i].propertyFlags & propertyFlags) == propertyFlags)
+        {
+            return i;
+        }
+    }
+
+    VK_CHECK(VK_ERROR_UNKNOWN);
+}
+
+U32 Application::getFormatBytesPerPixel(VkFormat format)
+{
+    switch (format)
+    {
+    case VK_FORMAT_R8G8B8A8_UNORM:
+    case VK_FORMAT_B8G8R8A8_UNORM:
+        return 4;
+    case VK_FORMAT_R16G16B16A16_SFLOAT:
+        return 8;
+    case VK_FORMAT_R32G32B32A32_SFLOAT:
+        return 16;
+    default:
+        throw std::runtime_error("Unsupported format");
+    }
+}
+
+VkResult Application::transitionImageLayout(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage, VkCommandBuffer commandBuffer)
+{
+    const VkImageMemoryBarrier barrier{
+        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask       = srcAccessMask,
+        .dstAccessMask       = dstAccessMask,
+        .oldLayout           = oldLayout,
+        .newLayout           = newLayout,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image               = image,
+        .subresourceRange    = {
+               .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+               .baseMipLevel   = 0,
+               .levelCount     = 1,
+               .baseArrayLayer = 0,
+               .layerCount     = 1 }
+    };
+
+    if (commandBuffer == VK_NULL_HANDLE)
+    {
+        // execute single time command buffer
+        VK_CHECK_RETURN(executeSingleTimeCommandBuffer([&](VkCommandBuffer cmdBuffer)
+                                                       {
+                                                           vkCmdPipelineBarrier(cmdBuffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+                                                           return VK_SUCCESS; }));
+    }
+    else
+    {
+        vkCmdPipelineBarrier(commandBuffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    }
+
+    return VK_SUCCESS;
+}
+
+#ifdef SAF_CUDA_INTEROP
+void* Application::getSemaphoreHandle(VkSemaphore semaphore)
+{
+#ifdef WIN32
+    const VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo{
+        .sType      = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
+        .semaphore  = semaphore,
+        .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT
+    };
+    HANDLE handle;
+    VK_CHECK(vkGetSemaphoreWin32HandleKHR(mLogicalDevice, &getWin32HandleInfo, &handle));
+    return reinterpret_cast<void*>(handle);
+#else
+    const VkSemaphoreGetFdInfoKHR getFdInfo{
+        .sType      = VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR,
+        .semaphore  = semaphore,
+        .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT
+    };
+    I32 fd;
+    VK_CHECK(vkGetSemaphoreFdKHR(mLogicalDevice, &getFdInfo, &fd));
+    return reinterpret_cast<void*>(static_cast<uintptr_t>(fd));
+#endif
+}
+
+void* Application::getMemoryHandle(VkDeviceMemory deviceMemory)
+{
+#ifdef WIN32
+    const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo{
+        .sType      = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
+        .memory     = deviceMemory,
+        .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR
+    };
+    HANDLE handle;
+    VK_CHECK(vkGetMemoryWin32HandleKHR(mLogicalDevice, &getWin32HandleInfo, &handle));
+    return reinterpret_cast<void*>(handle);
+#else
+    const VkMemoryGetFdInfoKHR getFdInfo{
+        .sType      = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
+        .memory     = deviceMemory,
+        .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR
+    };
+    I32 fd;
+    VK_CHECK(vkGetMemoryFdKHR(mLogicalDevice, &getFdInfo, &fd));
+    return reinterpret_cast<void*>(static_cast<uintptr_t>(fd));
+#endif
+}
+
+cudaChannelFormatDesc Application::getFormatDescriptor(VkFormat format)
+{
+    constexpr auto cudaCreateChannelDesc = []<typename T>() -> cudaChannelFormatDesc
+    {
+        cudaChannelFormatDesc desc{};
+        if constexpr (std::is_same_v<T, UVec4>)
+        {
+            desc.x = 8;
+            desc.y = 8;
+            desc.z = 8;
+            desc.w = 8;
+            desc.f = cudaChannelFormatKindUnsigned;
+        }
+        else if constexpr (std::is_same_v<T, HVec4>)
+        {
+            desc.x = 16;
+            desc.y = 16;
+            desc.z = 16;
+            desc.w = 16;
+            desc.f = cudaChannelFormatKindFloat;
+        }
+        else if constexpr (std::is_same_v<T, Vec4>)
+        {
+            desc.x = 32;
+            desc.y = 32;
+            desc.z = 32;
+            desc.w = 32;
+            desc.f = cudaChannelFormatKindFloat;
+        }
+
+        return desc;
+    };
+
+    switch (format)
+    {
+    case VK_FORMAT_R8G8B8A8_UNORM:
+        return cudaCreateChannelDesc.template operator()<UVec4>();
+    case VK_FORMAT_B8G8R8A8_UNORM:
+        return cudaCreateChannelDesc.template operator()<UVec4>();
+    case VK_FORMAT_R16G16B16A16_SFLOAT:
+        return cudaCreateChannelDesc.template operator()<HVec4>();
+    case VK_FORMAT_R32G32B32A32_SFLOAT:
+        return cudaCreateChannelDesc.template operator()<Vec4>();
+    default:
+        throw std::runtime_error("Unsupported format for CUDA interop");
+    }
+}
+
+#endif

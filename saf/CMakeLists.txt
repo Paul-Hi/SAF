@@ -14,7 +14,7 @@ add_library(saf
 
 target_link_libraries(saf
     PUBLIC
-    Vulkan::Vulkan
+    saf::volk_headers
     saf::eigen3
     saf::imgui
     $<$<BOOL:${OpenMP_CXX_FOUND}>:OpenMP::OpenMP_CXX>

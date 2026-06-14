@@ -3,7 +3,7 @@
 #include "test.hpp"
 #include <app/application.hpp>
 #include <app/parameter.hpp>
-#include <core/image.hpp>
+#include <core/helpers.hpp>
 #include <core/types.hpp>
 #include <imgui.h>
 #include <implot.h>
@@ -18,11 +18,28 @@ class DemoLayer : public Layer
 public:
     virtual void onAttach(Application* application) override
     {
-        mData.resize(720 * 720, Eigen::Vector4<Byte>(255, 0, 0, 255));
+        mData.resize(720 * 720, Eigen::Vector4<Byte>(0, 0, 0, 255));
 #ifdef SAF_CUDA_INTEROP
-        mImage = std::make_shared<Image>(application->getApplicationContext(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data(), true);
+        const VulkanImageCreateInfo imageCreateInfo{
+            .width         = 720,
+            .height        = 720,
+            .format        = VK_FORMAT_R8G8B8A8_UNORM,
+            .usage         = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+            .shareWithCUDA = true
+        };
+
+        VK_CHECK(application->createImage(imageCreateInfo, mImage));
+        VK_CHECK(application->uploadImage(mImage, mData.data(), mData.size() * sizeof(Eigen::Vector4<Byte>)));
 #else
-        mImage = std::make_shared<Image>(application->getApplicationContext(), 720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
+        const VulkanImageCreateInfo imageCreateInfo{
+            .width  = 720,
+            .height = 720,
+            .format = VK_FORMAT_R8G8B8A8_UNORM,
+            .usage  = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+        };
+
+        VK_CHECK(application->createImage(imageCreateInfo, mImage));
+        VK_CHECK(application->uploadImage(mImage, mData.data(), mData.size() * sizeof(Eigen::Vector4<Byte>)));
 #endif
         mRandom.set(RandGen(mSeed));
     }
@@ -38,9 +55,6 @@ public:
 
     virtual void onUpdate(Application* application, F32 dt) override
     {
-#ifdef SAF_CUDA_INTEROP
-        mImage->awaitCudaUpdateClearance();
-#endif
         if (mUpdate)
         {
             mUpdate = false;
@@ -59,15 +73,13 @@ public:
                     255);
             }
 
-            mImage->update(720, 720, VK_FORMAT_R8G8B8A8_UNORM, mData.data());
+            application->uploadImage(mImage, mData.data(), mData.size() * sizeof(Eigen::Vector4<Byte>));
 
 #ifdef SAF_CUDA_INTEROP
-            callGrayScaleKernel(mImage->getCudaSurfaceObject(), mImage->getCudaTextureObject(), mImage->getWidth(), mImage->getHeight());
+            const VulkanImage& vulkanImage = application->getImage(mImage);
+            callGrayScaleKernel(vulkanImage.cudaSurfaceObject, vulkanImage.cudaTextureObject, vulkanImage.width, vulkanImage.height);
 #endif
         }
-#ifdef SAF_CUDA_INTEROP
-        mImage->signalVulkanUpdateClearance();
-#endif
     }
 
     virtual void onUIRender(Application* application) override
@@ -76,7 +88,8 @@ public:
         F64 fr = static_cast<F64>(ImGui::GetIO().Framerate);
         ImGui::Text("Average %.3f ms/frame", 1000.0 / fr);
         ImGui::Spacing();
-        ImGui::Image(reinterpret_cast<ImTextureID>(mImage->getDescriptorSet()), ImVec2(static_cast<F32>(mImage->getWidth()), static_cast<F32>(mImage->getHeight())));
+        const VulkanImage& vulkanImage = application->getImage(mImage);
+        ImGui::Image(reinterpret_cast<ImTextureID>(vulkanImage.descriptorSet), ImVec2(static_cast<F32>(vulkanImage.width), static_cast<F32>(vulkanImage.height)));
         mUpdate |= mSeed.onUIRender();
 
         mRandom.onUIRender();
@@ -128,9 +141,10 @@ public:
         {
             ImPlot3D::SetupAxesLimits(-10, 10, -10, 10, -1.5, 1.5);
             ImPlot3D::PushStyleVar(ImPlot3DStyleVar_FillAlpha, 0.8f);
-            ImPlot3D::SetNextLineStyle(ImPlot3D::GetColormapColor(1));
+            ImPlot3DSpec spec;
+            spec.LineColor = ImPlot3D::GetColormapColor(1);
 
-            ImPlot3D::PlotSurface("Wavy Surface", xs, ys, zs, N, N);
+            ImPlot3D::PlotSurface("Wavy Surface", xs, ys, zs, N, N, 0.0, 0.0, spec);
 
             ImPlot3D::PopStyleVar();
             ImPlot3D::EndPlot();
@@ -144,7 +158,7 @@ public:
 
 private:
     bool mUpdate = true;
-    std::shared_ptr<Image> mImage;
+    ImageHandle mImage;
     std::vector<Eigen::Vector4<Byte>> mData;
 
     RandGenParameter mRandom = RandGenParameter("RandGen", RandGen(UVec2(0, 0)));
@@ -162,9 +176,11 @@ I32 main(I32 argc, char** argv)
     ApplicationSettings settings;
     settings.windowWidth  = 1920;
     settings.windowHeight = 1080;
-    settings.fontSize     = 24.0f;
+    settings.fontScale    = 1.0f;
     settings.name         = "Demo";
+    settings.theme        = 0;
     settings.clearColor   = Vec4(0.3f, 0.3f, 0.3f, 1.0f);
+    settings.vSyncEnabled = true;
 
     Application app(settings);
 
@@ -172,9 +188,9 @@ I32 main(I32 argc, char** argv)
                            {
         if (ImGui::BeginMenu("File"))
         {
-            if (ImGui::MenuItem("Exit"))
+            if (ImGui::MenuItem("Test"))
             {
-                app.close();
+                UILog::get().println("Test menu item clicked!");
             }
             ImGui::EndMenu();
         } });

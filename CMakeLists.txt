@@ -10,6 +10,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,undefined -g -O0")
+# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address,undefined")
 set(CMAKE_COLOR_MAKEFILE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -29,9 +31,9 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 option(SAF_BUILD_DOC "Build Documentation" OFF)
 option(SAF_ENABLE_CUDA_INTEROP "Enable Easy Interoperability with CUDA" OFF)
 
-set(VERSION_MAJOR 0 CACHE STRING "Project major version number.")
+set(VERSION_MAJOR 1 CACHE STRING "Project major version number.")
 set(VERSION_MINOR 0 CACHE STRING "Project minor version number.")
-set(VERSION_PATCH 1 CACHE STRING "Project patch version number.")
+set(VERSION_PATCH 0 CACHE STRING "Project patch version number.")
 mark_as_advanced(VERSION_MAJOR VERSION_MINOR VERSION_PATCH)
 
 message(STATUS "================================================")
@@ -65,8 +67,8 @@ include(FetchContent)
 set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE ALWAYS)
 set(FETCHCONTENT_QUIET TRUE)
 
-# Vulkan
-find_package(Vulkan REQUIRED)
+# volk
+include(volk)
 
 if(SAF_ENABLE_CUDA_INTEROP)
     # CUDA

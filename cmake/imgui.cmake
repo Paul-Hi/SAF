@@ -7,7 +7,7 @@ include(FetchContent)
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui
-    GIT_TAG v1.91.9b-docking
+    GIT_TAG v1.92.8-docking
     GIT_SHALLOW TRUE
 )
 
@@ -20,7 +20,7 @@ endif()
 FetchContent_Declare(
     implot
     GIT_REPOSITORY https://github.com/epezent/implot
-    GIT_TAG 3da8bd34299965d3b0ab124df743fe3e076fa222
+    GIT_TAG 262de5114e562aba56e0cab719c31a61e798b47e
 )
 
 FetchContent_GetProperties(implot)
@@ -32,8 +32,7 @@ endif()
 FetchContent_Declare(
     implot3d
     GIT_REPOSITORY https://github.com/brenocq/implot3d.git
-    GIT_TAG v0.2
-    GIT_SHALLOW TRUE
+    GIT_TAG 41ae3e447c0de20ecab95d38a4b4dc0835a3efc2
 )
 
 FetchContent_GetProperties(implot3d)
@@ -45,7 +44,7 @@ endif()
 FetchContent_Declare(
     imfile
     GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
-    GIT_TAG v0.6.7
+    GIT_TAG v0.6.8
     GIT_SHALLOW TRUE
 )
 
@@ -74,9 +73,12 @@ add_library(saf_imgui STATIC
     ${implot3d_SOURCE_DIR}/implot3d_meshes.cpp
     ${imfile_SOURCE_DIR}/ImGuiFileDialog.cpp
 )
+target_compile_definitions(saf_imgui PRIVATE IMGUI_IMPL_VULKAN_USE_VOLK)
+
 add_library(saf::imgui ALIAS saf_imgui)
 
-target_include_directories(saf_imgui PUBLIC . ${glfw_INCLUDE_DIRS} ${Vulkan_INCLUDE_DIRS} ${imgui_SOURCE_DIR} ${implot_SOURCE_DIR} ${implot3d_SOURCE_DIR} ${imfile_SOURCE_DIR})
+target_include_directories(saf_imgui PUBLIC . ${glfw_INCLUDE_DIRS} ${imgui_SOURCE_DIR} ${implot_SOURCE_DIR} ${implot3d_SOURCE_DIR} ${imfile_SOURCE_DIR})
 target_link_directories(saf_imgui PRIVATE ${CMAKE_BINARY_DIR})
+include(volk)
 include(glfw)
-target_link_libraries(saf_imgui PUBLIC saf::glfw Vulkan::Vulkan)
+target_link_libraries(saf_imgui PUBLIC saf::glfw saf::volk_headers)

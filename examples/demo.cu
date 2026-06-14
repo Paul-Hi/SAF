@@ -1,6 +1,6 @@
 #ifdef SAF_CUDA_INTEROP
 #include "demo.cuh"
-#include <cuda.h>
+#include <core/helpers.hpp>
 
 using namespace saf;
 
@@ -31,10 +31,13 @@ CUDA_GLOBAL_KERNEL void grayScaleKernel(cudaSurfaceObject_t imageSurface, cudaTe
     size_t x = threadIdx.x + blockIdx.x * blockDim.x;
     size_t y = threadIdx.y + blockIdx.y * blockDim.y;
 
-    F32 u = (F32)x / (F32)w;
-    F32 v = (F32)y / (F32)w;
+    if (x >= w || y >= h)
+        return;
 
-    //float4 readTest = tex2D<float4>(imageTexture, u, v);
+    // F32 u = (F32)x / (F32)w;
+    // F32 v = (F32)y / (F32)w;
+
+    // float4 readTest = tex2D<float4>(imageTexture, u, v);
 
     float4 readTest = rgbaIntToFloat(surf2Dread<unsigned int>(imageTexture, x * 4, y));
 
@@ -48,7 +51,7 @@ CUDA_GLOBAL_KERNEL void grayScaleKernel(cudaSurfaceObject_t imageSurface, cudaTe
 
 void callGrayScaleKernel(cudaSurfaceObject_t imageSurface, cudaTextureObject_t imageTexture, I32 w, I32 h)
 {
-    grayScaleKernel<<<{ w / 16, h / 16 }, { 16, 16 }>>>(imageSurface, imageTexture, w, h);
+    grayScaleKernel<<<{ w / 16 + 1, h / 16 + 1 }, { 16, 16 }>>>(imageSurface, imageTexture, w, h);
     CUDA_CHECK(cudaPeekAtLastError());
 }
 
