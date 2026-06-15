@@ -49,12 +49,14 @@ public:
         mUpdate = true;
     }
 
-    virtual void onDetach() override
+    virtual void onDetach(Application* application) override
     {
+        (void)application;
     }
 
     virtual void onUpdate(Application* application, F32 dt) override
     {
+        (void)dt;
         if (mUpdate)
         {
             mUpdate = false;

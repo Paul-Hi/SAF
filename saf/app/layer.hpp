@@ -41,9 +41,10 @@ namespace saf
 
         /**
          * @brief Called when @a Layer is detached from the application.
+         * @param[in] application A pointer to the @a Application the @a Layer is detached from.
          * @details Can be used to cleanup @a Layer members.
          */
-        virtual void onDetach() {}
+        virtual void onDetach(Application* application) { (void)application; }
 
         /**
          * @brief Called when @a Layer is updated by the application.

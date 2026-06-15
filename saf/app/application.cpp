@@ -666,7 +666,7 @@ void Application::close()
 
 void Application::popLayer()
 {
-    mLayerStack.back()->onDetach();
+    mLayerStack.back()->onDetach(this);
     mLayerStack.pop_back();
 }
 
