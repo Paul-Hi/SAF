@@ -70,11 +70,11 @@ namespace saf
         friend class RandGenParameter;
     };
 
-    class RandGenParameter : public ParameterBlock<RandGen, UVec4Parameter>
+    class RandGenParameter : public Parameter<RandGen>
     {
     public:
         RandGenParameter(const Str& name, const RandGen& randgen)
-            : ParameterBlock<RandGen, UVec4Parameter>(name, randgen){
+            : Parameter<RandGen>(name, randgen){
 
             };
 
@@ -82,16 +82,11 @@ namespace saf
 
         bool onUIRender() override
         {
-            ImGui::BeginDisabled(true);
+            ImGui::BeginDisabled();
             mValue.mState.onUIRender();
             ImGui::EndDisabled();
 
             return false;
-        }
-
-        std::tuple<UVec4Parameter*> getParameters() override
-        {
-            return { &mValue.mState };
         }
     };
 

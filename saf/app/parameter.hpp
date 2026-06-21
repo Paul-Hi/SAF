@@ -45,49 +45,6 @@ namespace saf
         Str mName;
         T mValue;
     };
-    template <typename T, typename... M>
-    class ParameterBlock : public Parameter<T>
-    {
-    public:
-        virtual ~ParameterBlock() = default;
-
-        constexpr U32 getParameterCount() const
-        {
-            return sizeof...(M);
-        }
-
-        virtual std::tuple<M*...> getParameters() = 0;
-
-        template <typename FuncT>
-        void forEachParameter(FuncT f)
-        {
-            std::apply([f](auto&&... args)
-                       { ((f(args)), ...); },
-                       getParameters());
-        }
-
-        bool onUIRender() override
-        {
-            bool changed = false;
-
-            if (ImGui::TreeNode(this->mName.c_str()))
-            {
-                ImGui::Spacing();
-                forEachParameter([&changed](auto&& p)
-                                 { changed |= p->onUIRender(); });
-
-                ImGui::TreePop();
-            }
-
-            return changed;
-        }
-
-    protected:
-        ParameterBlock(const Str& name, const T& value)
-            : Parameter<T>(name, value)
-        {
-        }
-    };
 
     class ByteParameter : public Parameter<Byte>
     {

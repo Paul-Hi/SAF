@@ -333,7 +333,7 @@ bool Application::run()
     auto startTime = std::chrono::high_resolution_clock::now();
     const bool res = [&]()
     {
-        const VkQueue queue = mQueueGCT.queue;
+        const VkQueue& queue = mQueueGCT.queue;
 
         while (!glfwWindowShouldClose(mWindow) && mRunning)
         {
@@ -342,6 +342,10 @@ bool Application::run()
             startTime        = currentTime;
 
             glfwPollEvents();
+
+            ImGui_ImplVulkan_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
 
 #ifdef SAF_CUDA_INTEROP
             for (const auto& image : mImages)
@@ -431,10 +435,6 @@ bool Application::run()
                 ImGui_ImplGlfw_Sleep(10);
                 continue;
             }
-
-            ImGui_ImplVulkan_NewFrame();
-            ImGui_ImplGlfw_NewFrame();
-            ImGui::NewFrame();
 
             const VkResult res = mVulkanSwapchain->acquire();
 
@@ -559,9 +559,10 @@ bool Application::run()
                     }
 
                     ImGui::End();
-
-                    ImGui::Render();
                 }
+
+                ImGui::EndFrame();
+                ImGui::Render();
 
                 // Main Draw
                 {
@@ -608,6 +609,10 @@ bool Application::run()
 
                 for (const auto& image : mImages)
                 {
+                    if (!image.second.sharedWithCuda)
+                    {
+                        continue;
+                    }
                     waitSemaphores.push_back(image.second.vkWaitSemaphore);
                     waitStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
 
@@ -717,6 +722,9 @@ VkResult Application::createImage(const VulkanImageCreateInfo& createInfo, Image
     image.height = createInfo.height;
     image.format = createInfo.format;
     image.handle = mNextImageHandle++;
+#ifdef SAF_CUDA_INTEROP
+    image.sharedWithCuda = createInfo.shareWithCUDA;
+#endif
 
     VkImageCreateInfo imageCreateInfo{
         .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -787,7 +795,7 @@ VkResult Application::createImage(const VulkanImageCreateInfo& createInfo, Image
         VK_CHECK_RETURN(vkCreateSemaphore(mLogicalDevice, &semaphoreCreateInfo, nullptr, &image.vkSignalSemaphore));
 
         // Signal once, since we update before rendering // NOTE Only solution without Timeline Semaphores
-        VkSubmitInfo submitInfo{
+        const VkSubmitInfo submitInfo{
             .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
             .signalSemaphoreCount = 1,
             .pSignalSemaphores    = &image.vkSignalSemaphore
@@ -1165,11 +1173,11 @@ VkResult Application::downloadImage(ImageHandle image, void* data, size_t size)
     VkSubresourceLayout layout;
     vkGetImageSubresourceLayout(mLogicalDevice, linearImage, &subresource, &layout);
 
-    void* mappedData;
-    VK_CHECK_RETURN(vkMapMemory(mLogicalDevice, linearImageMemory, 0, VK_WHOLE_SIZE, 0, &mappedData));
+    Byte* mappedData;
+    VK_CHECK_RETURN(vkMapMemory(mLogicalDevice, linearImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&(mappedData)));
 
-    mappedData += layout.offset * sizeof(Byte);
-    std::memcpy(data, mappedData, size);
+    mappedData += layout.offset;
+    std::memcpy(data, (void*)mappedData, size);
     vkUnmapMemory(mLogicalDevice, linearImageMemory);
 
     vkFreeMemory(mLogicalDevice, linearImageMemory, nullptr);
@@ -1193,6 +1201,14 @@ void Application::signalCudaCompletion(cudaExternalSemaphore_t semaphore, cudaSt
     CUDA_CHECK(cudaSignalExternalSemaphoresAsync(&semaphore, &externalSemaphoreSignalParams, 1, stream));
 }
 #endif
+
+void Application::pushLayer(std::unique_ptr<Layer>&& layer)
+{
+    VK_CHECK(vkQueueWaitIdle(mQueueGCT.queue));
+    VK_CHECK(vkDeviceWaitIdle(mLogicalDevice));
+    layer->onAttach(this);
+    mLayerStack.emplace_back(std::move(layer));
+}
 
 U32 Application::findMemoryType(U32 memoryTypeBits, VkMemoryPropertyFlags propertyFlags)
 {

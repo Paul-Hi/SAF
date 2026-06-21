@@ -102,7 +102,7 @@ namespace saf
         void pushLayer()
         {
             static_assert(std::is_base_of<Layer, T>::value, "Pushed type is not a Layer!");
-            mLayerStack.emplace_back(std::make_unique<T>())->onAttach(this);
+            pushLayer(std::make_unique<T>());
         }
 
         /**
@@ -258,6 +258,14 @@ namespace saf
          * @brief Destroys Vulkan and GLFW resources.
          */
         void destroy();
+
+        /**
+         * @brief Pushes a layer onto the layer stack.
+         * @details The internal implementation handles synchronization.
+         *
+         * @param layer The layer to push onto the stack.
+         */
+        void pushLayer(std::unique_ptr<Layer>&& layer);
 
         /**
          * @brief Finds a suitable memory type.

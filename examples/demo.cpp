@@ -1,6 +1,5 @@
 #include "demo.cuh"
 #include "random.hpp"
-#include "test.hpp"
 #include <app/application.hpp>
 #include <app/parameter.hpp>
 #include <core/helpers.hpp>
@@ -10,6 +9,7 @@
 #include <implot3d.h>
 #include <ui/imguiBackend.hpp>
 #include <ui/log.hpp>
+#include <ui/ui_helper.hpp>
 
 using namespace saf;
 
@@ -30,6 +30,7 @@ public:
 
         VK_CHECK(application->createImage(imageCreateInfo, mImage));
         VK_CHECK(application->uploadImage(mImage, mData.data(), mData.size() * sizeof(Eigen::Vector4<Byte>)));
+
 #else
         const VulkanImageCreateInfo imageCreateInfo{
             .width  = 720,
@@ -44,11 +45,6 @@ public:
         mRandom.set(RandGen(mSeed));
     }
 
-    inline void updateLayer()
-    {
-        mUpdate = true;
-    }
-
     virtual void onDetach(Application* application) override
     {
         (void)application;
@@ -56,6 +52,7 @@ public:
 
     virtual void onUpdate(Application* application, F32 dt) override
     {
+        mTest.onUpdate();
         (void)dt;
         if (mUpdate)
         {
@@ -167,7 +164,7 @@ private:
 
     UVec2Parameter mSeed = UVec2Parameter("Noise Seed", UVec2(19, 97), 0, UINT8_MAX);
 
-    TestParameter mTest = TestParameter("Test", Test());
+    SampleParameter mTest = SampleParameter("Test", 10);
 };
 
 I32 main(I32 argc, char** argv)
