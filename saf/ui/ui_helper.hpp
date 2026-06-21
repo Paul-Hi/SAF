@@ -15,7 +15,6 @@
 #include <algorithm>
 #include <app/parameter.hpp>
 #include <core/types.hpp>
-#include <imgui_internal.h>
 
 namespace saf
 {
