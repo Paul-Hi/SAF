@@ -32,9 +32,11 @@ namespace saf
         {
             bool changed = false;
 
-            ImGui::BeginChild("##SampleParameterChild", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY);
+            ImGui::BeginChild((mName + "##SampleParameterChild").c_str(), ImVec2(0, 0), ImGuiChildFlags_AutoResizeY);
 
             ImGui::Spacing();
+
+            ImGui::Text(mName.c_str());
 
             auto& [samples, running, currentSample] = mValue;
 
