@@ -73,7 +73,7 @@ add_library(saf_imgui STATIC
     ${implot3d_SOURCE_DIR}/implot3d_meshes.cpp
     ${imfile_SOURCE_DIR}/ImGuiFileDialog.cpp
 )
-target_compile_definitions(saf_imgui PRIVATE IMGUI_IMPL_VULKAN_USE_VOLK)
+target_compile_definitions(saf_imgui PRIVATE IMGUI_IMPL_VULKAN_USE_VOLK GLFW_INCLUDE_NONE)
 
 add_library(saf::imgui ALIAS saf_imgui)
 

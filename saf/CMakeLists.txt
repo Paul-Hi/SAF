@@ -69,6 +69,8 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(saf PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
+target_compile_definitions(saf PRIVATE GLFW_INCLUDE_NONE)
+
 add_library(saf::saf ALIAS saf)
 
 install(TARGETS saf DESTINATION lib)

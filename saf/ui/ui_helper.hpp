@@ -36,7 +36,7 @@ namespace saf
 
             ImGui::Spacing();
 
-            ImGui::Text(mName.c_str());
+            ImGui::Text("%s", mName.c_str());
 
             auto& [samples, running, currentSample] = mValue;
 
