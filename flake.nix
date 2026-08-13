@@ -27,6 +27,8 @@
         allowUnfree = true;
       };
     };
+
+    cuda = pkgs.cudaPackages_13;
   in {
     devShells.${system}.default = pkgs.mkShell.override {
       stdenv = pkgs.overrideCC pkgs.stdenv pkgs.gcc13;
@@ -43,8 +45,8 @@
 
         # CUDA
         pkgs.linuxPackages.nvidia_x11
-        pkgs.cudaPackages.cudatoolkit
-        pkgs.cudaPackages.cccl
+        cuda.cudatoolkit
+        cuda.cccl
 
         # Vulkan
         pkgs.vulkan-loader
@@ -87,7 +89,7 @@
             pkgs.libx11
             pkgs.libxkbcommon
             pkgs.vulkan-loader
-            pkgs.cudaPackages.cudatoolkit
+            cuda.cudatoolkit
             pkgs.linuxPackages.nvidia_x11
           ]}:$LD_LIBRARY_PATH"
 

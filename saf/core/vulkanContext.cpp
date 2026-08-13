@@ -212,24 +212,29 @@ VkResult VulkanContext::setupVulkanCudaInteropDevice(const Byte* vkDeviceUUID)
 
     while (currentCuDevice < deviceCount)
     {
-        cudaGetDeviceProperties(&deviceProp, currentCuDevice);
+        CUDA_CHECK(cudaGetDeviceProperties(&deviceProp, currentCuDevice));
 
-        if ((deviceProp.computeMode != cudaComputeModeProhibited))
+        int computeMode;
+        CUDA_CHECK(cudaDeviceGetAttribute(
+            &computeMode,
+            cudaDevAttrComputeMode,
+            currentCuDevice
+        ));
+        
+        if (computeMode != cudaComputeModeProhibited)
         {
-            int ret = std::memcmp(&deviceProp.uuid, vkDeviceUUID, VK_UUID_SIZE);
-            if (ret == 0)
+            if (std::memcmp(&deviceProp.uuid, vkDeviceUUID, VK_UUID_SIZE) == 0)
             {
                 CUDA_CHECK(cudaSetDevice(currentCuDevice));
                 CUDA_CHECK(cudaGetDeviceProperties(&deviceProp, currentCuDevice));
-                // std::cout << "Using GPU Device " << currentCuDevice << " " << deviceProp.name << " with capability " << deviceProp.major << "." << deviceProp.minor << '\n';
             }
         }
         else
         {
-            devicesProhibited++;
+            ++devicesProhibited;
         }
-
-        currentCuDevice++;
+        
+        ++currentCuDevice;
     }
 
     if (devicesProhibited == deviceCount)
