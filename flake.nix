@@ -90,14 +90,13 @@
 
               # Runtime libraries
               # This ensures the dynamic linker can find stuff
-              export LD_LIBRARY_PATH="${
+              export LD_LIBRARY_PATH="/run/opengl-driver/lib:${
                 pkgs.lib.makeLibraryPath [
                   pkgs.wayland
                   pkgs.libx11
                   pkgs.libxkbcommon
                   pkgs.vulkan-loader
                   cuda.cudatoolkit
-                  pkgs.linuxPackages.nvidia_x11
                 ]
               }:$LD_LIBRARY_PATH"
 
