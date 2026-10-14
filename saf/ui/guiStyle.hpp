@@ -11,15 +11,10 @@
 #ifndef GUI_STYLE_HPP
 #define GUI_STYLE_HPP
 
-#include "fontAwesome6RegularAndSolid.hpp"
-#include "iconsFA6.hpp"
-#include "interVariableFont.hpp"
+#include <ui/fontAwesome6RegularAndSolid.hpp>
+#include <ui/iconsFA6.hpp>
+#include <ui/interVariableFont.hpp>
 #include <imgui.h>
-#include <regex>
-
-#define interVariableFontTTFFile "assets/fonts/Inter-VariableFont_slnt,wght.ttf"
-#define fontAwesome6RegularTTFFile "assets/fonts/fa-regular-400.ttf"
-#define fontAwesome6SolidTTFFile "assets/fonts/fa-solid-900.ttf"
 
 namespace saf
 {
@@ -27,21 +22,24 @@ namespace saf
     {
         ImGuiIO& io = ImGui::GetIO();
 
-        ImFontConfig fontConfig;
-        fontConfig.FontDataOwnedByAtlas = false;
-        fontConfig.GlyphOffset          = ImVec2(0.0f, -1.0f); // optical centering for Inter
-        io.FontDefault                  = io.Fonts->AddFontFromMemoryCompressedTTF(
-            reinterpret_cast<const void*>(gInterVariableFontCompressedData),
-            gInterVariableFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &fontConfig);
+        if (io.Fonts->Fonts.Size == 0)
+        {
+            ImFontConfig fontConfig;
+            fontConfig.FontDataOwnedByAtlas = false;
+            fontConfig.GlyphOffset          = ImVec2(0.0f, -1.0f); // optical centering for Inter
+            io.FontDefault                  = io.Fonts->AddFontFromMemoryCompressedTTF(
+                reinterpret_cast<const void*>(gInterVariableFontCompressedData),
+                gInterVariableFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &fontConfig);
 
-        static const ImWchar iconsRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
-        ImFontConfig iconsConfig;
-        iconsConfig.MergeMode  = true;
-        iconsConfig.PixelSnapH = true;
-        io.Fonts->AddFontFromMemoryCompressedTTF(
-            reinterpret_cast<const void*>(gFontAwesome6RegularFontCompressedData), gFontAwesome6RegularFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &iconsConfig, iconsRanges);
-        io.Fonts->AddFontFromMemoryCompressedTTF(
-            reinterpret_cast<const void*>(gFontAwesome6SolidFontCompressedData), gFontAwesome6SolidFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &iconsConfig, iconsRanges);
+            static const ImWchar iconsRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+            ImFontConfig iconsConfig;
+            iconsConfig.MergeMode  = true;
+            iconsConfig.PixelSnapH = true;
+            io.Fonts->AddFontFromMemoryCompressedTTF(
+                reinterpret_cast<const void*>(gFontAwesome6RegularFontCompressedData), gFontAwesome6RegularFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &iconsConfig, iconsRanges);
+            io.Fonts->AddFontFromMemoryCompressedTTF(
+                reinterpret_cast<const void*>(gFontAwesome6SolidFontCompressedData), gFontAwesome6SolidFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &iconsConfig, iconsRanges);
+        }
 
         io.ConfigWindowsMoveFromTitleBarOnly = true;
 
@@ -272,21 +270,24 @@ namespace saf
     {
         ImGuiIO& io = ImGui::GetIO();
 
-        ImFontConfig fontConfig;
-        fontConfig.FontDataOwnedByAtlas = false;
-        fontConfig.GlyphOffset          = ImVec2(0.0f, -1.0f); // optical centering for Inter
-        io.FontDefault                  = io.Fonts->AddFontFromMemoryCompressedTTF(
-            reinterpret_cast<const void*>(gInterVariableFontCompressedData),
-            gInterVariableFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &fontConfig);
+        if (io.Fonts->Fonts.Size == 0)
+        {
+            ImFontConfig fontConfig;
+            fontConfig.FontDataOwnedByAtlas = false;
+            fontConfig.GlyphOffset          = ImVec2(0.0f, -1.0f); // optical centering for Inter
+            io.FontDefault                  = io.Fonts->AddFontFromMemoryCompressedTTF(
+                reinterpret_cast<const void*>(gInterVariableFontCompressedData),
+                gInterVariableFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &fontConfig);
 
-        static const ImWchar iconsRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
-        ImFontConfig iconsConfig;
-        iconsConfig.MergeMode  = true;
-        iconsConfig.PixelSnapH = true;
-        io.Fonts->AddFontFromMemoryCompressedTTF(
-            reinterpret_cast<const void*>(gFontAwesome6RegularFontCompressedData), gFontAwesome6RegularFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &iconsConfig, iconsRanges);
-        io.Fonts->AddFontFromMemoryCompressedTTF(
-            reinterpret_cast<const void*>(gFontAwesome6SolidFontCompressedData), gFontAwesome6SolidFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &iconsConfig, iconsRanges);
+            static const ImWchar iconsRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+            ImFontConfig iconsConfig;
+            iconsConfig.MergeMode  = true;
+            iconsConfig.PixelSnapH = true;
+            io.Fonts->AddFontFromMemoryCompressedTTF(
+                reinterpret_cast<const void*>(gFontAwesome6RegularFontCompressedData), gFontAwesome6RegularFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &iconsConfig, iconsRanges);
+            io.Fonts->AddFontFromMemoryCompressedTTF(
+                reinterpret_cast<const void*>(gFontAwesome6SolidFontCompressedData), gFontAwesome6SolidFontCompressedSize, 14.0f * fontScaleMain * fontScaleDpi, &iconsConfig, iconsRanges);
+        }
 
         io.ConfigWindowsMoveFromTitleBarOnly = true;
 

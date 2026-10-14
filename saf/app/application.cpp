@@ -6,8 +6,11 @@
  * @copyright Apache License 2.0
  */
 
-#include "application.hpp"
+// GLFW declares its Vulkan functions only if the Vulkan headers come first; keep this block separate so sorting cannot move it.
+#include <volk.h>
+
 #include <GLFW/glfw3.h>
+#include <app/application.hpp>
 #include <app/settings.hpp>
 #include <chrono>
 #include <core/helpers.hpp>
@@ -49,6 +52,7 @@ Application::Application(const ApplicationSettings& settings, bool loadFromPersi
     , mTheme(settings.theme)
     , mClearColor(settings.clearColor)
     , mVSyncEnabled(settings.vSyncEnabled)
+    , mMaxImages(settings.maxImages)
     , mRunning(true)
 {
     PersistentSettings persistedSettings;
@@ -78,12 +82,15 @@ Application::Application(const ApplicationSettings& settings, bool loadFromPersi
 
     mVulkanContext   = std::make_unique<VulkanContext>();
     mVulkanSwapchain = std::make_unique<VulkanSwapchain>();
-    init();
+    mInitialized     = init();
 }
 
 Application::~Application()
 {
-    VK_CHECK(vkDeviceWaitIdle(mLogicalDevice));
+    if (mLogicalDevice != VK_NULL_HANDLE)
+    {
+        VK_CHECK(vkDeviceWaitIdle(mLogicalDevice));
+    }
 
     while (!mLayerStack.empty())
     {
@@ -98,13 +105,13 @@ bool Application::init()
     glfwSetErrorCallback(glfwErrorCallback);
     if (!glfwInit())
     {
-        std::cerr << "[GLFW] Failed to initialize GLFW." << '\n';
+        std::cerr << "[glfw] Failed to initialize GLFW." << '\n';
         return false;
     }
 
     if (!glfwVulkanSupported())
     {
-        std::cerr << "[GLFW] Vulkan Not Supported." << '\n';
+        std::cerr << "[glfw] Vulkan Not Supported." << '\n';
         return false;
     }
 
@@ -140,7 +147,7 @@ bool Application::init()
 
     if (mVulkanContext->create(contextCreateInfo) != VK_SUCCESS)
     {
-        std::cerr << "[vulkan] Failed to create Vulkan context." << std::endl;
+        std::cerr << "[vulkan] Failed to create Vulkan context." << '\n';
         return false;
     }
 
@@ -158,7 +165,7 @@ bool Application::init()
 
     if (!mWindow)
     {
-        std::cerr << "[glfw] Failed to create GLFW window." << std::endl;
+        std::cerr << "[glfw] Failed to create GLFW window." << '\n';
         return false;
     }
 
@@ -167,7 +174,7 @@ bool Application::init()
     // Create Window Surface
     if (glfwCreateWindowSurface(mInstance, mWindow, nullptr, &mSurface) != VK_SUCCESS)
     {
-        std::cerr << "[glfw] Failed to create window surface." << std::endl;
+        std::cerr << "[glfw] Failed to create window surface." << '\n';
         return false;
     }
 
@@ -181,14 +188,14 @@ bool Application::init()
 
     if (mVulkanSwapchain->create(swapchainCreateInfo) != VK_SUCCESS)
     {
-        std::cerr << "[vulkan] Failed to create Vulkan swapchain." << std::endl;
+        std::cerr << "[vulkan] Failed to create Vulkan swapchain." << '\n';
         return false;
     }
 
     VkExtent2D swapchainExtent = { static_cast<U32>(mWindowWidth), static_cast<U32>(mWindowHeight) };
     if (mVulkanSwapchain->update(swapchainExtent, mVSyncEnabled) != VK_SUCCESS)
     {
-        std::cerr << "[vulkan] Failed to update swapchain." << std::endl;
+        std::cerr << "[vulkan] Failed to update swapchain." << '\n';
         return false;
     }
 
@@ -203,7 +210,7 @@ bool Application::init()
     };
     if (vkCreateCommandPool(mLogicalDevice, &commandPoolCreateInfo, nullptr, &mCommandPool) != VK_SUCCESS)
     {
-        std::cerr << "[vulkan] Failed to create command pool." << std::endl;
+        std::cerr << "[vulkan] Failed to create command pool." << '\n';
         return false;
     }
 
@@ -215,7 +222,7 @@ bool Application::init()
 
     if (vkCreateCommandPool(mLogicalDevice, &transientCommandPoolCreateInfo, nullptr, &mTransientCommandPool) != VK_SUCCESS)
     {
-        std::cerr << "[vulkan] Failed to create transient command pool." << std::endl;
+        std::cerr << "[vulkan] Failed to create transient command pool." << '\n';
         return false;
     }
 
@@ -230,7 +237,7 @@ bool Application::init()
     mCommandBuffers.resize(mVulkanSwapchain->getFramesInFlight());
     if (vkAllocateCommandBuffers(mLogicalDevice, &commandBufferAllocateInfo, mCommandBuffers.data()) != VK_SUCCESS)
     {
-        std::cerr << "[vulkan] Failed to allocate command buffer." << std::endl;
+        std::cerr << "[vulkan] Failed to allocate command buffer." << '\n';
         return false;
     }
 
@@ -266,7 +273,7 @@ bool Application::init()
         .Device             = mLogicalDevice,
         .QueueFamily        = mQueueGCT.familyIndex,
         .Queue              = mQueueGCT.queue,
-        .DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE * 2,
+        .DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE + mMaxImages,
         .MinImageCount      = mVulkanSwapchain->getImageCount(),
         .ImageCount         = mVulkanSwapchain->getImageCount(),
         .PipelineInfoMain{
@@ -300,7 +307,10 @@ bool Application::init()
 
 void Application::destroy()
 {
-    VK_CHECK(vkDeviceWaitIdle(mLogicalDevice));
+    if (mLogicalDevice != VK_NULL_HANDLE)
+    {
+        VK_CHECK(vkDeviceWaitIdle(mLogicalDevice));
+    }
 
     for (const auto& image : mImages)
     {
@@ -309,27 +319,49 @@ void Application::destroy()
 
     mImages.clear();
 
-    ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImPlot3D::DestroyContext();
-    ImPlot::DestroyContext();
-    ImGui::DestroyContext();
+    if (mInitialized)
+    {
+        ImGui_ImplVulkan_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImPlot3D::DestroyContext();
+        ImPlot::DestroyContext();
+        ImGui::DestroyContext();
+    }
 
-    vkFreeCommandBuffers(mLogicalDevice, mCommandPool, static_cast<U32>(mCommandBuffers.size()), mCommandBuffers.data());
+    if (mCommandPool != VK_NULL_HANDLE)
+    {
+        vkFreeCommandBuffers(mLogicalDevice, mCommandPool, static_cast<U32>(mCommandBuffers.size()), mCommandBuffers.data());
+        vkDestroyCommandPool(mLogicalDevice, mCommandPool, nullptr);
+    }
 
-    vkDestroyCommandPool(mLogicalDevice, mCommandPool, nullptr);
-    vkDestroyCommandPool(mLogicalDevice, mTransientCommandPool, nullptr);
+    if (mTransientCommandPool != VK_NULL_HANDLE)
+    {
+        vkDestroyCommandPool(mLogicalDevice, mTransientCommandPool, nullptr);
+    }
 
     mVulkanSwapchain->destroy();
-    vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
+
+    if (mSurface != VK_NULL_HANDLE)
+    {
+        vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
+    }
+
     mVulkanContext->destroy();
 
-    glfwDestroyWindow(mWindow);
+    if (mWindow)
+    {
+        glfwDestroyWindow(mWindow);
+    }
     glfwTerminate();
 }
 
 bool Application::run()
 {
+    if (!mInitialized)
+    {
+        return false;
+    }
+
     auto startTime = std::chrono::high_resolution_clock::now();
     const bool res = [&]()
     {
@@ -340,6 +372,20 @@ bool Application::run()
             auto currentTime = std::chrono::high_resolution_clock::now();
             F32 dt           = std::chrono::duration<F32, std::chrono::seconds::period>(currentTime - startTime).count();
             startTime        = currentTime;
+
+            std::vector<std::unique_ptr<Layer>> pendingLayerOps;
+            pendingLayerOps.swap(mPendingLayerOps);
+            for (auto& op : pendingLayerOps)
+            {
+                if (op)
+                {
+                    pushLayer(std::move(op));
+                }
+                else
+                {
+                    popLayer();
+                }
+            }
 
             glfwPollEvents();
 
@@ -352,16 +398,17 @@ bool Application::run()
             {
                 if (image.second.sharedWithCuda)
                 {
-                    // transitionImageLayout(image.second.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_NONE, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
                     waitForVulkanCompletion(image.second.cudaExternalWaitSemaphore);
                 }
             }
 #endif
 
+            mIteratingLayers = true;
             for (auto& layer : mLayerStack)
             {
                 layer->onUpdate(this, dt);
             }
+            mIteratingLayers = false;
 
 #ifdef SAF_CUDA_INTEROP
             for (const auto& image : mImages)
@@ -369,7 +416,6 @@ bool Application::run()
                 if (image.second.sharedWithCuda)
                 {
                     signalCudaCompletion(image.second.cudaExternalSignalSemaphore);
-                    // transitionImageLayout(image.second.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
                 }
             }
 #endif
@@ -395,7 +441,7 @@ bool Application::run()
                 VkExtent2D swapchainExtent = { static_cast<U32>(mWindowWidth), static_cast<U32>(mWindowHeight) };
                 if (mVulkanSwapchain->update(swapchainExtent, mVSyncEnabled) != VK_SUCCESS)
                 {
-                    std::cerr << "[vulkan] Failed to update swapchain." << std::endl;
+                    std::cerr << "[vulkan] Failed to update swapchain." << '\n';
                     return false;
                 }
 
@@ -553,10 +599,12 @@ bool Application::run()
                         ImGui::EndMainMenuBar();
                     }
 
+                    mIteratingLayers = true;
                     for (auto& layer : mLayerStack)
                     {
                         layer->onUIRender(this);
                     }
+                    mIteratingLayers = false;
 
                     ImGui::End();
                 }
@@ -585,7 +633,7 @@ bool Application::run()
                         .pColorAttachments    = &colorAttachment,
                     };
 
-                    transitionImageLayout(mVulkanSwapchain->getCurrentImage().image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, commandBuffer);
+                    transitionImageLayout(mVulkanSwapchain->getCurrentImage().image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, commandBuffer);
 
                     vkCmdBeginRendering(commandBuffer, &renderingInfo);
 
@@ -652,7 +700,11 @@ bool Application::run()
                     ImGui::RenderPlatformWindowsDefault();
                 }
 
-                mVulkanSwapchain->present();
+                const VkResult presentResult = mVulkanSwapchain->present();
+                if (presentResult != VK_ERROR_OUT_OF_DATE_KHR)
+                {
+                    VK_CHECK_RETURN_BOOL(presentResult);
+                }
             }
         }
 
@@ -671,6 +723,15 @@ void Application::close()
 
 void Application::popLayer()
 {
+    if (mIteratingLayers)
+    {
+        mPendingLayerOps.push_back(nullptr);
+        return;
+    }
+
+    if (mLayerStack.empty())
+        return;
+
     mLayerStack.back()->onDetach(this);
     mLayerStack.pop_back();
 }
@@ -697,7 +758,7 @@ VkResult Application::executeSingleTimeCommandBuffer(const std::function<VkResul
 
     VK_CHECK_RETURN(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo));
 
-    immediateFunction(commandBuffer);
+    VK_CHECK_RETURN(immediateFunction(commandBuffer));
 
     VK_CHECK_RETURN(vkEndCommandBuffer(commandBuffer));
 
@@ -726,6 +787,21 @@ VkResult Application::createImage(const VulkanImageCreateInfo& createInfo, Image
     image.sharedWithCuda = createInfo.shareWithCUDA;
 #endif
 
+    const VkResult result = createImageResources(image, createInfo);
+    if (result < 0)
+    {
+        destroyImageResources(image);
+        return result;
+    }
+
+    mImages.push_back({ image.handle, image });
+    outImage = image.handle;
+
+    return VK_SUCCESS;
+}
+
+VkResult Application::createImageResources(VulkanImage& image, const VulkanImageCreateInfo& createInfo)
+{
     VkImageCreateInfo imageCreateInfo{
         .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType     = VK_IMAGE_TYPE_2D,
@@ -735,7 +811,7 @@ VkResult Application::createImage(const VulkanImageCreateInfo& createInfo, Image
         .arrayLayers   = 1,
         .samples       = VK_SAMPLE_COUNT_1_BIT,
         .tiling        = VK_IMAGE_TILING_OPTIMAL,
-        .usage         = createInfo.usage,
+        .usage         = createInfo.usage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, // We need the trasnfer src bit for downloadImage
         .sharingMode   = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
     };
@@ -744,9 +820,8 @@ VkResult Application::createImage(const VulkanImageCreateInfo& createInfo, Image
     VkExternalMemoryImageCreateInfo externalMemoryImageCreateInfo{};
     if (createInfo.shareWithCUDA)
     {
-        imageCreateInfo.usage |= VK_IMAGE_USAGE_STORAGE_BIT;      // For CUDA read/write access
-        imageCreateInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // For reading back to CPU if needed
-        imageCreateInfo.flags |= VK_IMAGE_CREATE_ALIAS_BIT;       // Allow aliasing for CUDA interop
+        imageCreateInfo.usage |= VK_IMAGE_USAGE_STORAGE_BIT; // For CUDA read/write access
+        imageCreateInfo.flags |= VK_IMAGE_CREATE_ALIAS_BIT;  // Allow aliasing for CUDA interop
 
 #ifdef WIN32
         externalMemoryImageCreateInfo.sType       = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
@@ -954,9 +1029,6 @@ VkResult Application::createImage(const VulkanImageCreateInfo& createInfo, Image
 
     image.descriptorSet = ImGui_ImplVulkan_AddTexture(image.imageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    mImages.push_back({ image.handle, image });
-    outImage = image.handle;
-
     return VK_SUCCESS;
 }
 
@@ -966,6 +1038,8 @@ void Application::destroyImage(ImageHandle image)
     {
         if (it->first == image)
         {
+            // The image may still be sampled by frames in flight.
+            VK_CHECK(vkDeviceWaitIdle(mLogicalDevice));
             destroyImageResources(it->second);
             mImages.erase(it);
             return;
@@ -975,7 +1049,11 @@ void Application::destroyImage(ImageHandle image)
 
 void Application::destroyImageResources(const VulkanImage& vulkanImage)
 {
-    ImGui_ImplVulkan_RemoveTexture(vulkanImage.descriptorSet);
+    // NOTE: Handles may be null when called on a partially created image.
+    if (vulkanImage.descriptorSet != VK_NULL_HANDLE)
+    {
+        ImGui_ImplVulkan_RemoveTexture(vulkanImage.descriptorSet);
+    }
 
     vkDestroySampler(mLogicalDevice, vulkanImage.sampler, nullptr);
     vkDestroyImageView(mLogicalDevice, vulkanImage.imageView, nullptr);
@@ -985,16 +1063,34 @@ void Application::destroyImageResources(const VulkanImage& vulkanImage)
 #ifdef SAF_CUDA_INTEROP
     if (vulkanImage.sharedWithCuda)
     {
-        CUDA_CHECK(cudaDestroyTextureObject(vulkanImage.cudaTextureObject));
-        CUDA_CHECK(cudaDestroySurfaceObject(vulkanImage.cudaSurfaceObject));
-        CUDA_CHECK(cudaFreeMipmappedArray(vulkanImage.cudaMipmappedImageArray));
-        CUDA_CHECK(cudaDestroyExternalMemory(vulkanImage.cudaExternalImageMemory));
+        if (vulkanImage.cudaTextureObject)
+        {
+            CUDA_CHECK(cudaDestroyTextureObject(vulkanImage.cudaTextureObject));
+        }
+        if (vulkanImage.cudaSurfaceObject)
+        {
+            CUDA_CHECK(cudaDestroySurfaceObject(vulkanImage.cudaSurfaceObject));
+        }
+        if (vulkanImage.cudaMipmappedImageArray)
+        {
+            CUDA_CHECK(cudaFreeMipmappedArray(vulkanImage.cudaMipmappedImageArray));
+        }
+        if (vulkanImage.cudaExternalImageMemory)
+        {
+            CUDA_CHECK(cudaDestroyExternalMemory(vulkanImage.cudaExternalImageMemory));
+        }
 
         vkDestroySemaphore(mLogicalDevice, vulkanImage.vkWaitSemaphore, nullptr);
         vkDestroySemaphore(mLogicalDevice, vulkanImage.vkSignalSemaphore, nullptr);
 
-        CUDA_CHECK(cudaDestroyExternalSemaphore(vulkanImage.cudaExternalWaitSemaphore));
-        CUDA_CHECK(cudaDestroyExternalSemaphore(vulkanImage.cudaExternalSignalSemaphore));
+        if (vulkanImage.cudaExternalWaitSemaphore)
+        {
+            CUDA_CHECK(cudaDestroyExternalSemaphore(vulkanImage.cudaExternalWaitSemaphore));
+        }
+        if (vulkanImage.cudaExternalSignalSemaphore)
+        {
+            CUDA_CHECK(cudaDestroyExternalSemaphore(vulkanImage.cudaExternalSignalSemaphore));
+        }
     }
 #endif
 }
@@ -1024,9 +1120,20 @@ VkResult Application::uploadImage(ImageHandle image, const void* data, size_t si
         return VK_ERROR_UNKNOWN;
     }
 
+    VkBuffer stagingBuffer             = VK_NULL_HANDLE;
+    VkDeviceMemory stagingBufferMemory = VK_NULL_HANDLE;
+
+    const VkResult result = uploadImageResources(vulkanImage, data, size, stagingBuffer, stagingBufferMemory);
+
+    vkDestroyBuffer(mLogicalDevice, stagingBuffer, nullptr);
+    vkFreeMemory(mLogicalDevice, stagingBufferMemory, nullptr);
+
+    return result;
+}
+
+VkResult Application::uploadImageResources(const VulkanImage& vulkanImage, const void* data, size_t size, VkBuffer& stagingBuffer, VkDeviceMemory& stagingBufferMemory)
+{
     // Create staging buffer
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
 
     const VkBufferCreateInfo bufferCreateInfo{
         .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -1056,33 +1163,28 @@ VkResult Application::uploadImage(ImageHandle image, const void* data, size_t si
     vkUnmapMemory(mLogicalDevice, stagingBufferMemory);
 
     // Copy from staging buffer to image
-
     VK_CHECK_RETURN(executeSingleTimeCommandBuffer([&](VkCommandBuffer commandBuffer)
                                                    {
+            transitionImageLayout(vulkanImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT, commandBuffer);
 
-                                                       transitionImageLayout(vulkanImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_NONE, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, commandBuffer);
+            const VkBufferImageCopy bufferImageCopy{
+                .bufferOffset      = 0,
+                .bufferRowLength   = 0,
+                .bufferImageHeight = 0,
+                .imageSubresource  = {
+                     .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+                     .mipLevel       = 0,
+                     .baseArrayLayer = 0,
+                     .layerCount     = 1 },
+                .imageOffset = { 0, 0, 0 },
+                .imageExtent = { vulkanImage.width, vulkanImage.height, 1 }
+            };
 
-                                                       const VkBufferImageCopy bufferImageCopy{
-                                                           .bufferOffset      = 0,
-                                                           .bufferRowLength   = 0,
-                                                           .bufferImageHeight = 0,
-                                                           .imageSubresource  = {
-                                                                .aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-                                                                .mipLevel       = 0,
-                                                                .baseArrayLayer = 0,
-                                                                .layerCount     = 1 },
-                                                           .imageOffset = { 0, 0, 0 },
-                                                           .imageExtent = { vulkanImage.width, vulkanImage.height, 1 }
-                                                       };
+            vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, vulkanImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
 
-                                                       vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, vulkanImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferImageCopy);
+            transitionImageLayout(vulkanImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, commandBuffer);
 
-                                                       transitionImageLayout(vulkanImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, commandBuffer);
-
-                                                       return VK_SUCCESS; }));
-
-    vkDestroyBuffer(mLogicalDevice, stagingBuffer, nullptr);
-    vkFreeMemory(mLogicalDevice, stagingBufferMemory, nullptr);
+            return VK_SUCCESS; }));
 
     return VK_SUCCESS;
 }
@@ -1112,9 +1214,20 @@ VkResult Application::downloadImage(ImageHandle image, void* data, size_t size)
         return VK_ERROR_UNKNOWN;
     }
 
+    VkImage linearImage              = VK_NULL_HANDLE;
+    VkDeviceMemory linearImageMemory = VK_NULL_HANDLE;
+
+    const VkResult result = downloadImageResources(vulkanImage, data, size, linearImage, linearImageMemory);
+
+    vkFreeMemory(mLogicalDevice, linearImageMemory, nullptr);
+    vkDestroyImage(mLogicalDevice, linearImage, nullptr);
+
+    return result;
+}
+
+VkResult Application::downloadImageResources(const VulkanImage& vulkanImage, void* data, size_t size, VkImage& linearImage, VkDeviceMemory& linearImageMemory)
+{
     // Create linear tiled image for copying
-    VkImage linearImage;
-    VkDeviceMemory linearImageMemory;
 
     const VkImageCreateInfo imageCreateInfo{
         .sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1177,11 +1290,12 @@ VkResult Application::downloadImage(ImageHandle image, void* data, size_t size)
     VK_CHECK_RETURN(vkMapMemory(mLogicalDevice, linearImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&(mappedData)));
 
     mappedData += layout.offset;
-    std::memcpy(data, (void*)mappedData, size);
+    const size_t rowSize = size / vulkanImage.height;
+    for (U32 y = 0; y < vulkanImage.height; y++)
+    {
+        std::memcpy(static_cast<Byte*>(data) + y * rowSize, mappedData + y * layout.rowPitch, rowSize);
+    }
     vkUnmapMemory(mLogicalDevice, linearImageMemory);
-
-    vkFreeMemory(mLogicalDevice, linearImageMemory, nullptr);
-    vkDestroyImage(mLogicalDevice, linearImage, nullptr);
 
     return VK_SUCCESS;
 }
@@ -1204,6 +1318,15 @@ void Application::signalCudaCompletion(cudaExternalSemaphore_t semaphore, cudaSt
 
 void Application::pushLayer(std::unique_ptr<Layer>&& layer)
 {
+    if (!mInitialized)
+        return;
+
+    if (mIteratingLayers)
+    {
+        mPendingLayerOps.push_back(std::move(layer));
+        return;
+    }
+
     VK_CHECK(vkQueueWaitIdle(mQueueGCT.queue));
     VK_CHECK(vkDeviceWaitIdle(mLogicalDevice));
     layer->onAttach(this);

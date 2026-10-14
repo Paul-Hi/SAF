@@ -3,7 +3,6 @@ project(saf)
 message(STATUS "================================================")
 message(STATUS "Adding saf library!")
 
-file(GLOB_RECURSE HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp)
 file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
 add_library(saf
@@ -17,8 +16,7 @@ target_link_libraries(saf
     saf::volk_headers
     saf::eigen3
     saf::imgui
-    $<$<BOOL:${OpenMP_CXX_FOUND}>:OpenMP::OpenMP_CXX>
-    $<$<BOOL:${SAF_ENABLE_CUDA_INTEROP}>:${CUDA_LIBRARIES}>
+    $<$<BOOL:${SAF_ENABLE_CUDA_INTEROP}>:CUDA::cudart>
     PRIVATE
     saf::glfw
 )
@@ -59,7 +57,8 @@ target_compile_definitions(saf
 target_compile_options(saf
     PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>: /W4>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>: -Wall -Wextra -Wno-c++98-compat -Wno-c++98-compat-pedantic -Wno-gnu-zero-variadic-macro-arguments -Wno-global-constructors -Wno-documentation-unknown-command>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>: -Wall -Wextra -Wno-gnu-zero-variadic-macro-arguments -Wno-global-constructors -Wno-documentation-unknown-command>
+    $<$<CXX_COMPILER_ID:Clang>: -Wno-c++98-compat -Wno-c++98-compat-pedantic>
     $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v -Xcompiler=-fopenmp>
 )
 
@@ -74,9 +73,8 @@ target_compile_definitions(saf PRIVATE GLFW_INCLUDE_NONE)
 add_library(saf::saf ALIAS saf)
 
 install(TARGETS saf DESTINATION lib)
-install(DIRECTORY core/include/ DESTINATION include FILES_MATCHING PATTERN "*.hpp")
-install(DIRECTORY vulkan/include/ DESTINATION include FILES_MATCHING PATTERN "*.hpp")
-install(DIRECTORY app/include/ DESTINATION include FILES_MATCHING PATTERN "*.hpp")
-install(DIRECTORY ui/include/ DESTINATION include FILES_MATCHING PATTERN "*.hpp")
+install(DIRECTORY core/ DESTINATION include/saf/core FILES_MATCHING PATTERN "*.hpp")
+install(DIRECTORY app/ DESTINATION include/saf/app FILES_MATCHING PATTERN "*.hpp")
+install(DIRECTORY ui/ DESTINATION include/saf/ui FILES_MATCHING PATTERN "*.hpp")
 
 message(STATUS "================================================")

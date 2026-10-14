@@ -11,6 +11,7 @@
 #ifndef VULKAN_IMAGE_HPP
 #define VULKAN_IMAGE_HPP
 
+#include <core/types.hpp>
 #include <volk.h>
 
 #ifdef SAF_CUDA_INTEROP
@@ -36,18 +37,18 @@ namespace saf
         VkSampler sampler             = VK_NULL_HANDLE;
 
 #ifdef SAF_CUDA_INTEROP
-        bool sharedWithCuda;
+        bool sharedWithCuda = false;
 
-        cudaExternalMemory_t cudaExternalImageMemory;
+        cudaExternalMemory_t cudaExternalImageMemory = {};
 
-        cudaMipmappedArray_t cudaMipmappedImageArray;
-        cudaSurfaceObject_t cudaSurfaceObject;
-        cudaTextureObject_t cudaTextureObject;
+        cudaMipmappedArray_t cudaMipmappedImageArray = {};
+        cudaSurfaceObject_t cudaSurfaceObject        = {};
+        cudaTextureObject_t cudaTextureObject        = {};
 
-        VkSemaphore vkWaitSemaphore;
-        VkSemaphore vkSignalSemaphore;
-        cudaExternalSemaphore_t cudaExternalWaitSemaphore;
-        cudaExternalSemaphore_t cudaExternalSignalSemaphore;
+        VkSemaphore vkWaitSemaphore                         = VK_NULL_HANDLE;
+        VkSemaphore vkSignalSemaphore                       = VK_NULL_HANDLE;
+        cudaExternalSemaphore_t cudaExternalWaitSemaphore   = {};
+        cudaExternalSemaphore_t cudaExternalSignalSemaphore = {};
 #endif
     };
 } // namespace saf

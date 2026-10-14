@@ -6,7 +6,7 @@
  * @copyright Apache License 2.0
  */
 
-#include "vulkanSwapchain.hpp"
+#include <core/vulkanSwapchain.hpp>
 
 #include <core/helpers.hpp>
 
@@ -30,7 +30,7 @@ VkResult VulkanSwapchain::create(const SwapchainCreateInfo& createInfo)
 
     if (!supportsPresenting)
     {
-        std::cerr << "[vulkan] Error: The selected queue family does not support presenting to the surface." << std::endl;
+        std::cerr << "[vulkan] Error: The selected queue family does not support presenting to the surface." << '\n';
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -69,7 +69,7 @@ VkResult VulkanSwapchain::update(VkExtent2D& extent, bool vSyncEnabled)
         return VK_SUCCESS; // Ignore zero-sized extents (e.g., when minimizing the window)
     }
 
-    if (extent.width == mExtent.width && extent.height == mExtent.height && vSyncEnabled == mVSyncEnabled)
+    if (!mNeedsRebuild && extent.width == mExtent.width && extent.height == mExtent.height && vSyncEnabled == mVSyncEnabled)
     {
         return VK_SUCCESS; // No update needed
     }
@@ -97,7 +97,8 @@ VkResult VulkanSwapchain::acquire()
     {
         mNeedsRebuild = true;
     }
-    else
+
+    if (result != VK_ERROR_OUT_OF_DATE_KHR)
     {
         VK_CHECK_RETURN(vkResetFences(mLogicalDevice, 1, &inFlightFence));
     }
@@ -286,7 +287,7 @@ VkResult VulkanSwapchain::selectImageCount()
     U32 minImageCount = mSurfaceCapabilities.minImageCount;
     U32 maxImageCount = mSurfaceCapabilities.maxImageCount != 0 ? mSurfaceCapabilities.maxImageCount : std::numeric_limits<U32>::max();
 
-    mImageCount = std::clamp(minImageCount, mPreferredImageCount, maxImageCount);
+    mImageCount = std::clamp(mPreferredImageCount, minImageCount, maxImageCount);
 
     return VK_SUCCESS;
 }

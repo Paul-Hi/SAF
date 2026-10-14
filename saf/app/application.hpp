@@ -11,10 +11,16 @@
 #ifndef APPLICATION_HPP
 #define APPLICATION_HPP
 
-#include "layer.hpp"
+#include <app/layer.hpp>
 #include <core/vulkanContext.hpp>
 #include <core/vulkanImage.hpp>
 #include <core/vulkanSwapchain.hpp>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
 #include <vector>
 #include <volk.h>
 
@@ -46,6 +52,8 @@ namespace saf
         Vec4 clearColor;
         /** @brief Whether V-Sync is enabled. */
         bool vSyncEnabled = true;
+        /** @brief The maximum number of images the @a Application can hold at once. Not persisted. */
+        U32 maxImages = 64;
     };
 
     /**
@@ -77,7 +85,7 @@ namespace saf
         /**
          * @brief Constructs a @a Application.
          * @param[in] settings Settings to setup the application.
-         * @param[in] loadFromPersistedSettings Whether to load settings from a persisted source, e.g. an ini file. If true, the provided settings will be overridden by the persisted settings.
+         * @param[in] loadFromPersistedSettings Whether to load settings from a persisted source, e.g. an ini file. If true, every persisted field (name, window size, font scale, theme, clear color, V-Sync) overrides the provided settings, which then only act as first-run defaults. `maxImages` is not persisted.
          */
         Application(const ApplicationSettings& settings, bool loadFromPersistedSettings = true);
 
@@ -107,6 +115,7 @@ namespace saf
 
         /**
          * @brief Pops a @a Layer of the layer stack hold by the @a Application.
+         * @details Called from a layer callback, the change is applied at the start of the next frame. Does nothing on an empty stack.
          */
         void popLayer();
 
@@ -166,7 +175,7 @@ namespace saf
             case 2:
                 return mQueueC;
             default:
-                std::cerr << "Error: Invalid queue index requested from ApplicationContext. Returning graphics queue." << std::endl;
+                std::cerr << "Error: Invalid queue index requested from ApplicationContext. Returning graphics queue." << '\n';
                 return mQueueGCT;
             }
         }
@@ -261,7 +270,7 @@ namespace saf
 
         /**
          * @brief Pushes a layer onto the layer stack.
-         * @details The internal implementation handles synchronization.
+         * @details The internal implementation handles synchronization. Called from a layer callback, the push is applied at the start of the next frame.
          *
          * @param layer The layer to push onto the stack.
          */
@@ -280,6 +289,36 @@ namespace saf
          * @param image The Vulkan image for which to destroy resources.
          */
         void destroyImageResources(const VulkanImage& image);
+
+        /**
+         * @brief Creates the Vulkan (and CUDA) resources of an image. On failure, @a image holds whatever was created so far.
+         * @param[in,out] image The image to fill in.
+         * @param createInfo The image creation info.
+         * @return VkResult The result of the first failing call, or VK_SUCCESS.
+         */
+        VkResult createImageResources(VulkanImage& image, const VulkanImageCreateInfo& createInfo);
+
+        /**
+         * @brief Fills the staging buffer from @a data and copies it into the image. On failure, the out handles hold whatever was created so far.
+         * @param image The destination image.
+         * @param data The pixel data.
+         * @param size The size of @a data in bytes.
+         * @param[out] stagingBuffer The staging buffer, to be destroyed by the caller.
+         * @param[out] stagingBufferMemory The staging buffer memory, to be freed by the caller.
+         * @return VkResult The result of the first failing call, or VK_SUCCESS.
+         */
+        VkResult uploadImageResources(const VulkanImage& image, const void* data, size_t size, VkBuffer& stagingBuffer, VkDeviceMemory& stagingBufferMemory);
+
+        /**
+         * @brief Copies the image into a linear host-visible image and reads it back into @a data. On failure, the out handles hold whatever was created so far.
+         * @param image The source image.
+         * @param[out] data The destination for the pixel data.
+         * @param size The size of @a data in bytes.
+         * @param[out] linearImage The linear image, to be destroyed by the caller.
+         * @param[out] linearImageMemory The linear image memory, to be freed by the caller.
+         * @return VkResult The result of the first failing call, or VK_SUCCESS.
+         */
+        VkResult downloadImageResources(const VulkanImage& image, void* data, size_t size, VkImage& linearImage, VkDeviceMemory& linearImageMemory);
 
         /**
          * @brief Gets the number of bytes per pixel for a given Vulkan format.
@@ -350,8 +389,13 @@ namespace saf
         Vec4 mClearColor;
         /** @brief Whether V-Sync is enabled. */
         bool mVSyncEnabled;
+
+        /** @brief The maximum number of images, sizes the ImGui descriptor pool. */
+        U32 mMaxImages;
         /** @brief True, if the @a Application is running, else False. */
-        bool mRunning;
+        bool mRunning = false;
+        /** @brief True, if init() completed successfully, else False. */
+        bool mInitialized = false;
 
         /** @brief The @a Applications menubar callback. */
         std::function<void()> mMenubarCallback;
@@ -359,24 +403,30 @@ namespace saf
         std::function<void(I32, I32)> mOnResizeCallback;
 
         /** @brief The @a Applications window handle. */
-        GLFWwindow* mWindow;
+        GLFWwindow* mWindow = nullptr;
         /** @brief The @a Applications vulkan context. */
         std::unique_ptr<VulkanContext> mVulkanContext;
         /** @brief The @a Applications vulkan swapchain. */
         std::unique_ptr<VulkanSwapchain> mVulkanSwapchain;
 
         /** @brief The @a Applications window surface. */
-        VkSurfaceKHR mSurface;
+        VkSurfaceKHR mSurface = VK_NULL_HANDLE;
 
         /** @brief The @a Applications layer stack. */
         std::vector<std::unique_ptr<Layer>> mLayerStack;
 
+        /** @brief Whether the layer loops are running, layer stack changes are deferred then. */
+        bool mIteratingLayers = false;
+
+        /** @brief Deferred layer stack changes applied at the start of the next frame, a nullptr pops. */
+        std::vector<std::unique_ptr<Layer>> mPendingLayerOps;
+
         /** @brief The @a Applications Vulkan instance. */
-        VkInstance mInstance;
+        VkInstance mInstance = VK_NULL_HANDLE;
         /** @brief The @a Applications physical device. */
-        VkPhysicalDevice mPhysicalDevice;
+        VkPhysicalDevice mPhysicalDevice = VK_NULL_HANDLE;
         /** @brief The @a Applications logical device. */
-        VkDevice mLogicalDevice;
+        VkDevice mLogicalDevice = VK_NULL_HANDLE;
 
         /** @brief The @a Applications graphics queue. */
         VulkanQueue mQueueGCT;
@@ -386,9 +436,9 @@ namespace saf
         VulkanQueue mQueueC;
 
         /** @brief The @a Applications command pool. */
-        VkCommandPool mCommandPool;
+        VkCommandPool mCommandPool = VK_NULL_HANDLE;
         /** @brief The @a Applications transient command pool. */
-        VkCommandPool mTransientCommandPool;
+        VkCommandPool mTransientCommandPool = VK_NULL_HANDLE;
         /** @brief The @a Applications command buffers. */
         std::vector<VkCommandBuffer> mCommandBuffers;
 

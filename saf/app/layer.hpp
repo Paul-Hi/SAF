@@ -11,11 +11,9 @@
 #ifndef LAYER_HPP
 #define LAYER_HPP
 
-#include "parameter.hpp"
-#include <fstream>
+#include <app/parameter.hpp>
 
 struct GLFWwindow;
-struct VulkanWindow;
 
 namespace saf
 {

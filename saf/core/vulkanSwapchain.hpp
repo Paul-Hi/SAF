@@ -58,7 +58,7 @@ namespace saf
         VkSurfaceFormatKHR mSurfaceFormat;
         VkImageUsageFlags mImageUsage;
 
-        VkExtent2D mExtent;
+        VkExtent2D mExtent = {};
         VkPresentModeKHR mPresentMode;
         bool mVSyncEnabled = true;
 

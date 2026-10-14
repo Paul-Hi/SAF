@@ -11,8 +11,11 @@
 #ifndef SETTINGS_HPP
 #define SETTINGS_HPP
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <string>
+#include <string_view>
 
 namespace saf
 {

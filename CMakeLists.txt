@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.26)
 
 project(SAF
-    VERSION 0.01
+    VERSION 1.0.0
     DESCRIPTION "Small Application Framework."
     LANGUAGES CXX C
 )
@@ -32,11 +32,6 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 option(SAF_BUILD_DOC "Build Documentation" OFF)
 option(SAF_ENABLE_CUDA_INTEROP "Enable Easy Interoperability with CUDA" OFF)
 
-set(VERSION_MAJOR 1 CACHE STRING "Project major version number.")
-set(VERSION_MINOR 0 CACHE STRING "Project minor version number.")
-set(VERSION_PATCH 0 CACHE STRING "Project patch version number.")
-mark_as_advanced(VERSION_MAJOR VERSION_MINOR VERSION_PATCH)
-
 message(STATUS "================================================")
 message(STATUS "             #####     #    #######             ")
 message(STATUS "            #     #   # #   #                   ")
@@ -48,7 +43,7 @@ message(STATUS "             #####  #     # #                   ")
 message(STATUS "================================================")
 message(STATUS "Copyright (c) 2023-present, Paul Himmler")
 message(STATUS "================================================")
-message(STATUS "Version v" ${VERSION_MAJOR} "." ${VERSION_MINOR} ${VERSION_PATCH} " Licensed Apache License 2.0")
+message(STATUS "Version v" ${PROJECT_VERSION} " Licensed Apache License 2.0")
 message(STATUS "================================================")
 message(STATUS "Build Type: " ${CMAKE_BUILD_TYPE})
 
@@ -74,6 +69,7 @@ include(volk)
 if(SAF_ENABLE_CUDA_INTEROP)
     # CUDA
     enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
 endif()
 
 # Eigen

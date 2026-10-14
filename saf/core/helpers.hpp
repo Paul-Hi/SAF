@@ -11,6 +11,9 @@
 #ifndef HELPERS_HPP
 #define HELPERS_HPP
 
+#include <cmath>
+#include <cstdlib>
+#include <iostream>
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan_core.h>
 
@@ -212,7 +215,7 @@ namespace saf
         if (cudaSuccess != _result)                                                                                                                         \
         {                                                                                                                                                   \
             std::cerr << "[cuda] Error " << _result << " in " << __FILE__ << " " << __LINE__ << " " << cudaGetErrorString(_result) << " " << #call << "\n"; \
-            exit(0);                                                                                                                                        \
+            exit(1);                                                                                                                                        \
         }                                                                                                                                                   \
     }
 

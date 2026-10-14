@@ -5,7 +5,6 @@ set(APP_NAME demo)
 message(STATUS "================================================")
 message(STATUS "Adding demo!")
 
-file(GLOB_RECURSE HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp ${CMAKE_CURRENT_SOURCE_DIR}/*.cuh)
 file(GLOB_RECURSE SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp ${CMAKE_CURRENT_SOURCE_DIR}/*.cu)
 
 if(WIN32 AND MSVC)
@@ -63,7 +62,6 @@ endif()
 target_link_options(${APP_NAME} PRIVATE ${SUBSYSTEM_LINKER_OPTIONS})
 
 install(TARGETS ${APP_NAME} DESTINATION bin)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/assets/ DESTINATION bin/assets)
 install(FILES ${CMAKE_SOURCE_DIR}/imgui.ini DESTINATION bin)
 
 message(STATUS "================================================")

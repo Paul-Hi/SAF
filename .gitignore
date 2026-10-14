@@ -3,3 +3,11 @@ build/*
 install/*
 # git
 .git/*
+
+# agent stuff
+.scratch/*
+.agent/*
+.claude/*
+.serena/*
+.codegraph/*
+

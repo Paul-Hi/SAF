@@ -61,15 +61,28 @@ public:
             mRandom.set(RandGen(mSeed));
 
 #ifndef SAF_DEBUG
-#pragma omp parallel for
+#pragma omp parallel
 #endif
-            for (I32 i = 0; i < mData.size(); ++i)
             {
-                mData[i] = Eigen::Vector4<Byte>(
-                    static_cast<Byte>(mRandom.get().rand() * 255),
-                    static_cast<Byte>(mRandom.get().rand() * 255),
-                    static_cast<Byte>(mRandom.get().rand() * 255),
-                    255);
+                // One generator per thread, seeded from mRandom: threads never share generator state.
+                UVec2 threadSeed;
+#ifndef SAF_DEBUG
+#pragma omp critical
+#endif
+                threadSeed = UVec2(static_cast<U32>(mRandom.get().rand() * 0xFFFFFF), static_cast<U32>(mRandom.get().rand() * 0xFFFFFF));
+                RandGen threadGen(threadSeed);
+
+#ifndef SAF_DEBUG
+#pragma omp for
+#endif
+                for (I32 i = 0; i < mData.size(); ++i)
+                {
+                    mData[i] = Eigen::Vector4<Byte>(
+                        static_cast<Byte>(threadGen.rand() * 255),
+                        static_cast<Byte>(threadGen.rand() * 255),
+                        static_cast<Byte>(threadGen.rand() * 255),
+                        255);
+                }
             }
 
             application->uploadImage(mImage, mData.data(), mData.size() * sizeof(Eigen::Vector4<Byte>));

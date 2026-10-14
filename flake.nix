@@ -90,8 +90,10 @@
 
               # Runtime libraries
               # This ensures the dynamic linker can find stuff
+              # stdenv.cc.cc.lib first: the nixpkgs validation layer needs a newer libstdc++ than gcc13's
               export LD_LIBRARY_PATH="/run/opengl-driver/lib:${
                 pkgs.lib.makeLibraryPath [
+                  pkgs.stdenv.cc.cc.lib
                   pkgs.wayland
                   pkgs.libx11
                   pkgs.libxkbcommon

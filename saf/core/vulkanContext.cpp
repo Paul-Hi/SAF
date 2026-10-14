@@ -6,7 +6,7 @@
  * @copyright Apache License 2.0
  */
 
-#include "vulkanContext.hpp"
+#include <core/vulkanContext.hpp>
 
 #include <core/helpers.hpp>
 
@@ -32,7 +32,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityF
 
         std::cerr << "[vulkan] Validation Layer: "
                   << severity(messageSeverity) << " (" << pCallbackData->pMessageIdName << ", ID " << pCallbackData->messageIdNumber << "): "
-                  << pCallbackData->pMessage << std::endl;
+                  << pCallbackData->pMessage << '\n';
     }
 
     (void)(pUserData);
@@ -145,7 +145,7 @@ VkResult VulkanContext::selectPhysicalDevice(const ContextCreateInfo& createInfo
 
     if (deviceCount == 0)
     {
-        std::cerr << "Failed to find a device supporting Vulkan!" << std::endl;
+        std::cerr << "Failed to find a device supporting Vulkan!" << '\n';
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -170,7 +170,7 @@ VkResult VulkanContext::selectPhysicalDevice(const ContextCreateInfo& createInfo
     vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
     if (properties.apiVersion < createInfo.apiVersion)
     {
-        std::cerr << "Selected GPU does not support the required Vulkan API version!" << std::endl;
+        std::cerr << "Selected GPU does not support the required Vulkan API version!" << '\n';
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -209,6 +209,7 @@ VkResult VulkanContext::setupVulkanCudaInteropDevice(const Byte* vkDeviceUUID)
 
     I32 currentCuDevice   = 0;
     I32 devicesProhibited = 0;
+    bool deviceFound      = false;
 
     while (currentCuDevice < deviceCount)
     {
@@ -227,6 +228,7 @@ VkResult VulkanContext::setupVulkanCudaInteropDevice(const Byte* vkDeviceUUID)
             {
                 CUDA_CHECK(cudaSetDevice(currentCuDevice));
                 CUDA_CHECK(cudaGetDeviceProperties(&deviceProp, currentCuDevice));
+                deviceFound = true;
             }
         }
         else
@@ -240,6 +242,12 @@ VkResult VulkanContext::setupVulkanCudaInteropDevice(const Byte* vkDeviceUUID)
     if (devicesProhibited == deviceCount)
     {
         std::cerr << "[cuda] Error : No Vulkan-CUDA Interop capable GPU found.\n";
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    if (!deviceFound)
+    {
+        std::cerr << "[cuda] Error : No CUDA device matches the Vulkan device UUID.\n";
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -321,7 +329,7 @@ VkResult VulkanContext::selectQueueFamilies(const ContextCreateInfo& createInfo)
     {
         if (!findQueue(requestedQueue))
         {
-            std::cerr << "Failed to find a suitable queue family for desired queue flags: " << requestedQueue << std::endl;
+            std::cerr << "Failed to find a suitable queue family for desired queue flags: " << requestedQueue << '\n';
             return VK_ERROR_INITIALIZATION_FAILED;
         }
     }
@@ -440,7 +448,7 @@ VkResult VulkanContext::printVulkanVersion()
     U32 version;
     VK_CHECK_RETURN(vkEnumerateInstanceVersion(&version));
 
-    std::cout << "Vulkan API Version: " << VK_VERSION_MAJOR(version) << "." << VK_VERSION_MINOR(version) << "." << VK_VERSION_PATCH(version) << std::endl;
+    std::cout << "Vulkan API Version: " << VK_VERSION_MAJOR(version) << "." << VK_VERSION_MINOR(version) << "." << VK_VERSION_PATCH(version) << '\n';
 
     return VK_SUCCESS;
 }
@@ -483,11 +491,11 @@ static std::string getVersionString(uint32_t version)
 
 static void printPhysicalDeviceProperties(const VkPhysicalDeviceProperties& properties)
 {
-    std::cout << "Device Name: " << properties.deviceName << std::endl;
-    std::cout << "Vendor: " << getVendorName(properties.vendorID) << " (0x" << std::hex << properties.vendorID << std::dec << ")" << std::endl;
-    std::cout << "Device Type: " << getDeviceType(properties.deviceType) << std::endl;
-    std::cout << "API Version: " << getVersionString(properties.apiVersion) << std::endl;
-    std::cout << "Driver Version: " << getVersionString(properties.driverVersion) << std::endl;
+    std::cout << "Device Name: " << properties.deviceName << '\n';
+    std::cout << "Vendor: " << getVendorName(properties.vendorID) << " (0x" << std::hex << properties.vendorID << std::dec << ")" << '\n';
+    std::cout << "Device Type: " << getDeviceType(properties.deviceType) << '\n';
+    std::cout << "API Version: " << getVersionString(properties.apiVersion) << '\n';
+    std::cout << "Driver Version: " << getVersionString(properties.driverVersion) << '\n';
 }
 
 VkResult VulkanContext::printGpus()
@@ -498,7 +506,7 @@ VkResult VulkanContext::printGpus()
     std::vector<VkPhysicalDevice> gpus(deviceCount);
     VK_CHECK_RETURN(vkEnumeratePhysicalDevices(mInstance, &deviceCount, gpus.data()));
 
-    std::cout << "Available Vulkan GPUs: " << deviceCount << std::endl;
+    std::cout << "Available Vulkan GPUs: " << deviceCount << '\n';
 
     uint32_t usedGpuIndex = 0;
     for (uint32_t d = 0; d < deviceCount; d++)
@@ -511,12 +519,12 @@ VkResult VulkanContext::printGpus()
         VkPhysicalDeviceProperties properties;
         vkGetPhysicalDeviceProperties(gpus[d], &properties);
 
-        std::cout << " - " << d << ") " << properties.deviceName << std::endl;
+        std::cout << " - " << d << ") " << properties.deviceName << '\n';
     }
 
     if (mPhysicalDevice == VK_NULL_HANDLE)
     {
-        std::cout << "No compatible GPU." << std::endl;
+        std::cout << "No compatible GPU." << '\n';
         return VK_ERROR_INITIALIZATION_FAILED;
     }
 
@@ -537,19 +545,19 @@ VkResult VulkanContext::printQueues()
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(mPhysicalDevice, &queueFamilyCount, queueFamilies.data());
 
-    std::cout << "Available Queue Families: " << queueFamilyCount << std::endl;
+    std::cout << "Available Queue Families: " << queueFamilyCount << '\n';
 
     for (uint32_t i = 0; i < queueFamilyCount; i++)
     {
         const auto flags = string_VkQueueFlags(queueFamilies[i].queueFlags);
-        std::cout << " - " << i << ") " << queueFamilies[i].queueCount << " queues : " << flags << std::endl;
+        std::cout << " - " << i << ") " << queueFamilies[i].queueCount << " queues : " << flags << '\n';
     }
 
     std::cout << "Used queues:\n";
 
     for (const auto& queue : mQueues)
     {
-        std::cout << " - family: " << queue.familyIndex << ", index: " << queue.queueIndex << std::endl;
+        std::cout << " - family: " << queue.familyIndex << ", index: " << queue.queueIndex << '\n';
     }
 
     return VK_SUCCESS;

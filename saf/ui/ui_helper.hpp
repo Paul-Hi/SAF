@@ -11,7 +11,7 @@
 #ifndef UI_HELPER_HPP
 #define UI_HELPER_HPP
 
-#include "iconsFA6.hpp"
+#include <ui/iconsFA6.hpp>
 #include <algorithm>
 #include <app/parameter.hpp>
 #include <core/types.hpp>

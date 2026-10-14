@@ -34,12 +34,7 @@ CUDA_GLOBAL_KERNEL void grayScaleKernel(cudaSurfaceObject_t imageSurface, cudaTe
     if (x >= w || y >= h)
         return;
 
-    // F32 u = (F32)x / (F32)w;
-    // F32 v = (F32)y / (F32)w;
-
-    // float4 readTest = tex2D<float4>(imageTexture, u, v);
-
-    float4 readTest = rgbaIntToFloat(surf2Dread<unsigned int>(imageTexture, x * 4, y));
+    float4 readTest = rgbaIntToFloat(surf2Dread<unsigned int>(imageSurface, x * 4, y));
 
     F32 grayScale = readTest.x * 0.3 + readTest.y * 0.59 + readTest.z * 0.11;
     readTest.x    = grayScale;
