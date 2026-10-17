@@ -18,42 +18,43 @@ struct GLFWwindow;
 namespace saf
 {
     /**
-     * @brief @a Layer.
+     * @brief Layer.
      */
     class Layer
     {
     public:
         /**
-         * @brief Constructs a @a Layer.
+         * @brief Constructs a Layer.
          */
         Layer() noexcept = default;
 
         virtual ~Layer() = default;
 
         /**
-         * @brief Called when @a Layer is attached to the application.
-         * @details Can be used to initialized required @a Layer members.
-         * @param[in] application A pointer to the @a Application the @a Layer is attached to.
+         * @brief Called when the Layer is attached to the application.
+         * @details Can be used to initialize required Layer members.
+         * @param[in] application A pointer to the Application the Layer is attached to.
          */
         virtual void onAttach(class Application* application) { (void)application; }
 
         /**
-         * @brief Called when @a Layer is detached from the application.
-         * @param[in] application A pointer to the @a Application the @a Layer is detached from.
-         * @details Can be used to cleanup @a Layer members.
+         * @brief Called when the Layer is detached from the application.
+         * @details Can be used to clean up Layer members.
+         * @param[in] application A pointer to the Application the Layer is detached from.
          */
         virtual void onDetach(Application* application) { (void)application; }
 
         /**
-         * @brief Called when @a Layer is updated by the application.
-         * @param[in] application A pointer to the @a Application the @a Layer is updated by.
+         * @brief Called when the Layer is updated by the application.
+         * @param[in] application A pointer to the Application the Layer is updated by.
+         * @param[in] dt The time since the previous frame in seconds.
          */
         virtual void onUpdate(class Application* application, float dt) { (void)application; }
 
         /**
          * @brief Called when the application is rendering the user interface.
-         * @param[in] application A pointer to the @a Application the @a Layer is updated by.
          * @details Can be used to submit custom ImGui windows.
+         * @param[in] application A pointer to the Application the Layer is rendered by.
          */
         virtual void onUIRender(Application* application) {}
     };

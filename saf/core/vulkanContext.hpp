@@ -63,6 +63,8 @@ namespace saf
 
         VkDebugUtilsMessengerEXT mDebugMessenger = VK_NULL_HANDLE;
 
+        VkPhysicalDeviceFeatures mEnabledFeatures{};
+
     public:
         VulkanContext() = default;
         ~VulkanContext()
@@ -79,6 +81,7 @@ namespace saf
         VkPhysicalDevice getPhysicalDevice() const { return mPhysicalDevice; }
         VkDevice getLogicalDevice() const { return mLogicalDevice; }
         const VulkanQueue& getQueue(U32 idx) const { return mQueues[idx]; }
+        const VkPhysicalDeviceFeatures& getEnabledFeatures() const { return mEnabledFeatures; }
 
         void destroy();
 

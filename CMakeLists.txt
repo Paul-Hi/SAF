@@ -31,6 +31,7 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 
 option(SAF_BUILD_DOC "Build Documentation" OFF)
 option(SAF_ENABLE_CUDA_INTEROP "Enable Easy Interoperability with CUDA" OFF)
+option(SAF_ENABLE_VULKAN_COMPUTE "Enable Vulkan Compute API Exposure" ON)
 
 message(STATUS "================================================")
 message(STATUS "             #####     #    #######             ")
@@ -67,7 +68,10 @@ set(FETCHCONTENT_QUIET TRUE)
 include(volk)
 
 if(SAF_ENABLE_CUDA_INTEROP)
-    # CUDA
+    # CUDA, compiled for the RTX 50 series unless the architectures are given
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES 120)
+    endif()
     enable_language(CUDA)
     find_package(CUDAToolkit REQUIRED)
 endif()
@@ -80,6 +84,14 @@ include(glfw)
 
 # imgui and more
 include(imgui)
+
+if(SAF_ENABLE_VULKAN_COMPUTE)
+    # SPIRV-Reflect
+    include(spirv-reflect)
+
+    # saf_add_shaders
+    include(shaders)
+endif()
 
 if(SAF_BUILD_DOC)
     find_package(Doxygen REQUIRED dot)

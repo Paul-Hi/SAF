@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan_core.h>
 
@@ -28,6 +29,16 @@ namespace saf
     {
         const char* errMsg = string_VkResult(result);
         std::cerr << "[vulkan] Error:  " << errMsg << " from " << expression << ", " << file << ":" << line << "\n";
+    }
+
+    /**
+     * @brief Reports programmer misuse of the SAF API and aborts.
+     * @param message What was misused.
+     */
+    [[noreturn]] inline void reportMisuse(const std::string& message)
+    {
+        std::cerr << "[vulkan] Error: " << message << '\n';
+        exit(1);
     }
 
 #define VK_CHECK(vkFnc)                                           \

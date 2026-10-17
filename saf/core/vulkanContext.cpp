@@ -219,9 +219,8 @@ VkResult VulkanContext::setupVulkanCudaInteropDevice(const Byte* vkDeviceUUID)
         CUDA_CHECK(cudaDeviceGetAttribute(
             &computeMode,
             cudaDevAttrComputeMode,
-            currentCuDevice
-        ));
-        
+            currentCuDevice));
+
         if (computeMode != cudaComputeModeProhibited)
         {
             if (std::memcmp(&deviceProp.uuid, vkDeviceUUID, VK_UUID_SIZE) == 0)
@@ -235,7 +234,7 @@ VkResult VulkanContext::setupVulkanCudaInteropDevice(const Byte* vkDeviceUUID)
         {
             ++devicesProhibited;
         }
-        
+
         ++currentCuDevice;
     }
 
@@ -273,7 +272,6 @@ VkResult VulkanContext::selectQueueFamilies(const ContextCreateInfo& createInfo)
     const auto findQueue = [&](VkQueueFlags requestedQueue)
     {
         // Do not use VK_QUEUE_GRAPHICS_BIT if not needed
-
         for (U32 j = 0; j < queueFamilyCount; ++j)
         {
             // exact match, unused queue family
@@ -322,6 +320,16 @@ VkResult VulkanContext::selectQueueFamilies(const ContextCreateInfo& createInfo)
             }
         }
 
+        for (U32 j = 0; j < queueFamilyCount; ++j)
+        {
+            // exact match, all queues taken: share the family's first queue
+            if ((queueFamilies[j].queueFlags & requestedQueue) == requestedQueue)
+            {
+                mQueues.push_back({ j, 0 });
+                return true;
+            }
+        }
+
         return false;
     };
 
@@ -357,13 +365,25 @@ VkResult VulkanContext::createLogicalDevice(const ContextCreateInfo& createInfo)
 {
     VkPhysicalDeviceVulkan13Features deviceFeatures13{
         .sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .synchronization2 = true,
         .dynamicRendering = true,
     };
 
-    VkPhysicalDeviceFeatures2 deviceFeatures{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-        .pNext = &deviceFeatures13,
+    VkPhysicalDeviceVulkan12Features deviceFeatures12{
+        .sType             = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .pNext             = &deviceFeatures13,
+        .timelineSemaphore = true,
     };
+
+    VkPhysicalDeviceFeatures supportedFeatures;
+    vkGetPhysicalDeviceFeatures(mPhysicalDevice, &supportedFeatures);
+
+    VkPhysicalDeviceFeatures2 deviceFeatures{
+        .sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext    = &deviceFeatures12,
+        .features = { .shaderFloat64 = supportedFeatures.shaderFloat64, .shaderInt64 = supportedFeatures.shaderInt64 }, //  might be nice to have in general?
+    };
+    mEnabledFeatures = deviceFeatures.features;
 
     std::vector<const char*> deviceExtensions;
     deviceExtensions.reserve(createInfo.deviceExtensions.size());

@@ -21,14 +21,30 @@
 
 namespace saf
 {
-    using ImageHandle = U32;
+    /** @brief A handle to an image held by the Application. */
+    using ImageHandle = Handle<struct ImageTag>;
+
+    /** @brief What else accesses an image besides the CPU and ImGui. */
+    enum class ImageSharing
+    {
+        /** @brief Only the CPU and ImGui. */
+        None,
+#ifdef SAF_CUDA_INTEROP
+        /** @brief CUDA kernels, through Application::getCudaSurface and Application::getCudaTexture. */
+        Cuda,
+#endif
+#ifdef SAF_VULKAN_COMPUTE
+        /** @brief Compute shaders, through Application::bind. Kept in VK_IMAGE_LAYOUT_GENERAL for its lifetime. */
+        Compute,
+#endif
+    };
 
     struct VulkanImage
     {
         U32 width;
         U32 height;
         VkFormat format;
-        ImageHandle handle;
+        ImageSharing sharing = ImageSharing::None;
 
         VkImage image                 = VK_NULL_HANDLE;
         VkImageView imageView         = VK_NULL_HANDLE;
@@ -37,18 +53,11 @@ namespace saf
         VkSampler sampler             = VK_NULL_HANDLE;
 
 #ifdef SAF_CUDA_INTEROP
-        bool sharedWithCuda = false;
-
         cudaExternalMemory_t cudaExternalImageMemory = {};
 
         cudaMipmappedArray_t cudaMipmappedImageArray = {};
         cudaSurfaceObject_t cudaSurfaceObject        = {};
         cudaTextureObject_t cudaTextureObject        = {};
-
-        VkSemaphore vkWaitSemaphore                         = VK_NULL_HANDLE;
-        VkSemaphore vkSignalSemaphore                       = VK_NULL_HANDLE;
-        cudaExternalSemaphore_t cudaExternalWaitSemaphore   = {};
-        cudaExternalSemaphore_t cudaExternalSignalSemaphore = {};
 #endif
     };
 } // namespace saf

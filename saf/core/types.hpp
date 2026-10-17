@@ -11,6 +11,7 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
+#include <compare>
 #include <Eigen/Core>
 #include <Eigen/Eigen>
 #include <Eigen/Geometry>
@@ -206,6 +207,14 @@ namespace saf
 #define HALF_PI (0.5 * PI)
 /** @brief One divided by Pi. */
 #define INV_PI (1.0 / PI)
+
+    /** @brief A handle to a resource held by the @a Application; @a Tag keeps handles of different resources apart. The id 0 is invalid. */
+    template <typename Tag>
+    struct Handle
+    {
+        U32 id = 0;
+        auto operator<=>(const Handle&) const = default;
+    };
 
 } // namespace saf
 

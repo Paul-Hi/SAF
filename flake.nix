@@ -61,6 +61,7 @@
               pkgs.vulkan-utility-libraries
               pkgs.vulkan-tools
               pkgs.shaderc
+              pkgs.shader-slang
               pkgs.spirv-tools
 
               # Wayland + X11 (for GLFW)

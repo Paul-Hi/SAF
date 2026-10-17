@@ -141,7 +141,11 @@ VkResult VulkanSwapchain::createSwapchain()
     VK_CHECK_RETURN(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(mPhysicalDevice, mSurface, &mSurfaceCapabilities));
 
     VK_CHECK_RETURN(selectImageCount());
-    mFramesInFlight = std::min(mPreferredFramesInFlight, mImageCount);
+    // Only set once in the beginning (if unset)
+    if (mFramesInFlight == 0)
+    {
+        mFramesInFlight = std::min(mPreferredFramesInFlight, mImageCount);
+    }
 
     VK_CHECK_RETURN(selectSwapExtent());
     SAF_ASSERT(mExtent.width > 0 && mExtent.height > 0);

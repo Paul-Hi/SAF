@@ -19,6 +19,7 @@ target_link_libraries(saf
     $<$<BOOL:${SAF_ENABLE_CUDA_INTEROP}>:CUDA::cudart>
     PRIVATE
     saf::glfw
+    $<$<BOOL:${SAF_ENABLE_VULKAN_COMPUTE}>:saf::spirv-reflect-static>
 )
 
 target_include_directories(saf
@@ -49,6 +50,8 @@ target_compile_definitions(saf
     $<$<CONFIG:Debug>:SAF_DEBUG>
     $<$<CXX_COMPILER_ID:MSVC>: _CRT_SECURE_NO_WARNINGS>
     $<$<BOOL:${SAF_ENABLE_CUDA_INTEROP}>:SAF_CUDA_INTEROP>
+    $<$<BOOL:${SAF_ENABLE_VULKAN_COMPUTE}>:SAF_VULKAN_COMPUTE>
+    $<$<BOOL:${WIN32}>:VK_USE_PLATFORM_WIN32_KHR>
     PRIVATE
     $<$<BOOL:${WIN32}>:WIN32>
     $<$<BOOL:${LINUX}>:LINUX>
@@ -71,10 +74,5 @@ endif()
 target_compile_definitions(saf PRIVATE GLFW_INCLUDE_NONE)
 
 add_library(saf::saf ALIAS saf)
-
-install(TARGETS saf DESTINATION lib)
-install(DIRECTORY core/ DESTINATION include/saf/core FILES_MATCHING PATTERN "*.hpp")
-install(DIRECTORY app/ DESTINATION include/saf/app FILES_MATCHING PATTERN "*.hpp")
-install(DIRECTORY ui/ DESTINATION include/saf/ui FILES_MATCHING PATTERN "*.hpp")
 
 message(STATUS "================================================")
