@@ -372,6 +372,7 @@ VkResult VulkanContext::createLogicalDevice(const ContextCreateInfo& createInfo)
     VkPhysicalDeviceVulkan12Features deviceFeatures12{
         .sType             = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
         .pNext             = &deviceFeatures13,
+        .scalarBlockLayout = true,
         .timelineSemaphore = true,
     };
 
