@@ -32,6 +32,7 @@ endif(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 option(SAF_BUILD_DOC "Build Documentation" OFF)
 option(SAF_ENABLE_CUDA_INTEROP "Enable Easy Interoperability with CUDA" OFF)
 option(SAF_ENABLE_VULKAN_COMPUTE "Enable Vulkan Compute API Exposure" ON)
+option(SAF_BUILD_EXAMPLES "Build the example templates" ${PROJECT_IS_TOP_LEVEL})
 
 message(STATUS "================================================")
 message(STATUS "             #####     #    #######             ")
@@ -109,6 +110,8 @@ set(SAF_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/saf)
 
 add_subdirectory(saf)
 
-add_subdirectory(examples)
+if(SAF_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
 message(STATUS "================================================")

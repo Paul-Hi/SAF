@@ -6,7 +6,9 @@ A Simple Application Framework with Vulkan and ImGui to quickly and easily creat
 
 After checking out the repository, CMake should automatically set up all dependencies except the Vulkan SDK.
 
-SAF is not installed as a prebuilt library. Add it to your project's CMake build with `add_subdirectory` or `FetchContent`, link `saf::saf`, and add SAF's `saf/` directory to your include path (`SAF_INCLUDE_DIR`), as `examples/template_slang/CMakeLists.txt` does. `examples/template_slang` (Vulkan compute with Slang) and `examples/template_cuda` (CUDA interop) are minimal applications to copy as a starting point.
+SAF is not installed as a prebuilt library. Add it to your project's CMake build with `add_subdirectory` or `FetchContent`, link `saf::saf`, and add SAF's `saf/` directory to your include path (`SAF_INCLUDE_DIR`), as `examples/template_slang/CMakeLists.txt` does. `examples/template_slang` (Vulkan compute with Slang) and `examples/template_cuda` (CUDA interop) are minimal applications to copy as a starting point. They are built only when SAF is the top-level project, unless `SAF_BUILD_EXAMPLES` says otherwise.
+
+`skills/saf/` is an agent skill for creating and writing SAF applications; its `scripts/new-project.sh` scaffolds a project from either template. To use it with Claude Code, link it into your skills: `ln -s "$PWD/skills/saf" ~/.claude/skills/saf`.
 
 ## Dependencies
 
