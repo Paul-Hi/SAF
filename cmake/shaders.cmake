@@ -50,9 +50,9 @@ function(saf_add_shaders target)
             if(NOT SAF_SLANGC_EXECUTABLE)
                 message(FATAL_ERROR "saf_add_shaders: slangc not found, needed for ${source}")
             endif()
-            # Adding -fp-mode precise decorates every float operation NoContraction if deterministic and correct fp math is required..
+            # Adding -fp-mode precise instead of fast decorates every float operation NoContraction if deterministic and correct fp math is required..
             # That makes results identical wherever the same expression is inlined, at some speed, for all shaders.
-            set(command ${SAF_SLANGC_EXECUTABLE} ${sourcePath} -target spirv -fvk-use-entrypoint-name -depfile ${depfile} -o ${output})
+            set(command ${SAF_SLANGC_EXECUTABLE} ${sourcePath} -target spirv -fvk-use-entrypoint-name  -O3 -fp-mode fast -depfile ${depfile} -o ${output})
         else()
             message(FATAL_ERROR "saf_add_shaders: no shader compiler for '${extension}' (${source})")
         endif()
