@@ -369,9 +369,25 @@ VkResult VulkanContext::createLogicalDevice(const ContextCreateInfo& createInfo)
         .dynamicRendering = true,
     };
 
+    // Float atomic add on storage buffers, enabled when the device supports it
+    const bool atomicFloatSupported = checkDeviceExtensionSupport({ VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME }) == VK_SUCCESS;
+    VkPhysicalDeviceShaderAtomicFloatFeaturesEXT supportedAtomicFloatFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT };
+    if (atomicFloatSupported)
+    {
+        VkPhysicalDeviceFeatures2 supportedFeatures2{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &supportedAtomicFloatFeatures };
+        vkGetPhysicalDeviceFeatures2(mPhysicalDevice, &supportedFeatures2);
+    }
+
+    VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFloatFeatures{
+        .sType                        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT,
+        .pNext                        = &deviceFeatures13,
+        .shaderBufferFloat32AtomicAdd = supportedAtomicFloatFeatures.shaderBufferFloat32AtomicAdd,
+    };
+    mShaderBufferFloat32AtomicAdd = atomicFloatFeatures.shaderBufferFloat32AtomicAdd;
+
     VkPhysicalDeviceVulkan12Features deviceFeatures12{
         .sType             = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .pNext             = &deviceFeatures13,
+        .pNext             = atomicFloatSupported ? static_cast<void*>(&atomicFloatFeatures) : static_cast<void*>(&deviceFeatures13),
         .scalarBlockLayout = true,
         .timelineSemaphore = true,
     };
@@ -391,6 +407,10 @@ VkResult VulkanContext::createLogicalDevice(const ContextCreateInfo& createInfo)
     for (const auto& extension : createInfo.deviceExtensions)
     {
         deviceExtensions.push_back(extension.extensionName);
+    }
+    if (atomicFloatSupported)
+    {
+        deviceExtensions.push_back(VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME);
     }
 
     VK_CHECK_RETURN(checkDeviceExtensionSupport(deviceExtensions));

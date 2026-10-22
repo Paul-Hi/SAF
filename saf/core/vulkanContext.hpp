@@ -62,6 +62,7 @@ namespace saf
         std::vector<VkDeviceQueueCreateInfo> mQueueCreateInfos;
 
         VkDebugUtilsMessengerEXT mDebugMessenger = VK_NULL_HANDLE;
+        VkBool32 mShaderBufferFloat32AtomicAdd   = VK_FALSE;
 
         VkPhysicalDeviceFeatures mEnabledFeatures{};
 
@@ -82,6 +83,7 @@ namespace saf
         VkDevice getLogicalDevice() const { return mLogicalDevice; }
         const VulkanQueue& getQueue(U32 idx) const { return mQueues[idx]; }
         const VkPhysicalDeviceFeatures& getEnabledFeatures() const { return mEnabledFeatures; }
+        VkBool32 isShaderBufferFloat32AtomicAddEnabled() const { return mShaderBufferFloat32AtomicAdd; }
 
         void destroy();
 

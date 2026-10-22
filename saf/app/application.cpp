@@ -1835,7 +1835,7 @@ VkResult Application::createComputePipelineResources(VulkanComputePipeline& pipe
     }
     const VkResult reflectResult = reflectComputeShader(module, createInfo.entryPoint, pipeline.bindings, pipeline.pushConstantSize);
 
-    // The device features that SPIR-V capabilities need; SAF enables only shaderInt16, shaderInt64, and shaderFloat64 for now, when the device supports them
+    // The device features that SPIR-V capabilities need; SAF enables only shaderInt16, shaderInt64, shaderFloat64, and shaderBufferFloat32AtomicAdd for now, when the device supports them
     const VkPhysicalDeviceFeatures& enabledFeatures = mVulkanContext->getEnabledFeatures();
     const struct
     {
@@ -1846,6 +1846,7 @@ VkResult Application::createComputePipelineResources(VulkanComputePipeline& pipe
         { SpvCapabilityInt64, enabledFeatures.shaderInt64, "shaderInt64" },
         { SpvCapabilityInt16, enabledFeatures.shaderInt16, "shaderInt16" },
         { SpvCapabilityFloat64, enabledFeatures.shaderFloat64, "shaderFloat64" },
+        { SpvCapabilityAtomicFloat32AddEXT, mVulkanContext->isShaderBufferFloat32AtomicAddEnabled(), "shaderBufferFloat32AtomicAdd" },
     };
     const char* missingFeature = nullptr;
     for (U32 i = 0; i < module.capability_count; ++i)
